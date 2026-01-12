@@ -1,10 +1,17 @@
-import MobileLayout from "@/components/layout/MobileLayout";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Heart, Download, Share2, ArrowLeft } from "lucide-react";
-import { useLocation } from "wouter";
+import React, { useState } from "react";
+import {
+  View,
+  FlatList,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  Dimensions,
+  ScrollView,
+} from "react-native";
+import { Text, Button } from "react-native-paper";
+import { ArrowLeft, Plus, Heart, Share, Download } from "lucide-react-native"; // ← Lucide icons
 
-// Mock Images
 const images = [
   { id: 1, url: "https://images.unsplash.com/photo-1566737236500-c8ac43014a67?auto=format&fit=crop&q=80&w=800", caption: "Installation Banquet 2025" },
   { id: 2, url: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&q=80&w=800", caption: "Charity Walk Team" },
@@ -14,64 +21,158 @@ const images = [
   { id: 6, url: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=800", caption: "Summer BBQ" },
 ];
 
+const { width } = Dimensions.get("window");
+const IMAGE_SIZE = width / 3 - 2;
+
 export default function Gallery() {
-  const [, setLocation] = useLocation();
+  const [selected, setSelected] = useState(null);
 
   return (
-    <MobileLayout>
-      <div className="px-6 py-6 pb-2">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="-ml-2" onClick={() => setLocation("/")}>
-               <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h1 className="font-serif text-2xl font-bold text-foreground">Social Gallery</h1>
-          </div>
-          <Button size="icon" variant="outline" className="h-8 w-8 rounded-full bg-primary/10 border-primary/20 text-primary">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+    <View style={styles.container}>
+      {/* Header - Fixed */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity>
+            <ArrowLeft color="#333" size={22} />
+          </TouchableOpacity>
+          <Text variant="titleLarge" style={styles.heading}>
+            Social Gallery
+          </Text>
+        </View>
 
-      <div className="grid grid-cols-3 gap-0.5 px-0.5">
-        {images.map((img) => (
-           <Dialog key={img.id}>
-             <DialogTrigger asChild>
-                <div className="relative group cursor-pointer overflow-hidden aspect-square">
-                  <img 
-                    src={img.url} 
-                    alt={img.caption} 
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                </div>
-             </DialogTrigger>
-             <DialogContent className="max-w-sm w-[90%] p-0 overflow-hidden bg-transparent border-none shadow-none">
-                <div className="bg-card rounded-lg overflow-hidden shadow-2xl">
-                  <div className="relative aspect-[4/5] bg-black">
-                     <img src={img.url} alt={img.caption} className="w-full h-full object-contain" />
-                  </div>
-                  <div className="p-4 space-y-4">
-                    <div className="flex justify-between items-center">
-                       <p className="font-medium font-serif">{img.caption}</p>
-                       <div className="flex gap-2">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-lodge-red hover:text-lodge-red/80 hover:bg-lodge-red/10">
-                            <Heart className="h-5 w-5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8">
-                            <Share2 className="h-5 w-5" />
-                          </Button>
-                       </div>
-                    </div>
-                    <Button className="w-full" variant="secondary">
-                       <Download className="mr-2 h-4 w-4" /> Download Original
-                    </Button>
-                  </div>
-                </div>
-             </DialogContent>
-           </Dialog>
-        ))}
-      </div>
-    </MobileLayout>
+        <Button
+          mode="outlined"
+          compact
+          icon={() => <Plus color="#333" size={18} />}
+          onPress={() => {}}
+        />
+      </View>
+
+      {/* Scrollable Content */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <FlatList
+          data={images}
+          keyExtractor={(item) => item.id.toString()}
+          numColumns={3}
+          scrollEnabled={false} // Let ScrollView handle scrolling
+          renderItem={({ item }) => (
+            <TouchableOpacity onPress={() => setSelected(item)}>
+              <Image
+                source={{ uri: item.url }}
+                style={styles.image}
+              />
+            </TouchableOpacity>
+          )}
+        />
+      </ScrollView>
+
+      {/* Modal Viewer */}
+      <Modal visible={!!selected} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Image
+              source={{ uri: selected?.url }}
+              style={styles.preview}
+              resizeMode="contain"
+            />
+
+            <View style={styles.modalContent}>
+              <View style={styles.captionRow}>
+                <Text style={styles.caption}>{selected?.caption}</Text>
+
+                <View style={styles.actions}>
+                  <TouchableOpacity>
+                    <Heart color="#c62828" size={22} />
+                  </TouchableOpacity>
+                  <TouchableOpacity>
+                    <Share color="#333" size={22} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <Button
+                mode="contained-tonal"
+                icon={() => <Download color="#333" size={16} />}
+                onPress={() => {}}
+              >
+                Download Original
+              </Button>
+
+              <Button
+                mode="text"
+                onPress={() => setSelected(null)}
+              >
+                Close
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  header: {
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    zIndex: 10,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  heading: {
+    fontWeight: "700",
+  },
+  scrollContent: {
+    padding: 1,
+  },
+  image: {
+    width: IMAGE_SIZE,
+    height: IMAGE_SIZE,
+    margin: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCard: {
+    width: "90%",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  preview: {
+    width: "100%",
+    height: 400,
+    backgroundColor: "#000",
+  },
+  modalContent: {
+    padding: 16,
+    gap: 12,
+  },
+  captionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  caption: {
+    fontWeight: "600",
+    flex: 1,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+});

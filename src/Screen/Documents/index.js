@@ -1,10 +1,9 @@
-import MobileLayout from "@/components/layout/MobileLayout";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { FileText, Download, Upload } from "lucide-react";
+import React, { useState } from "react";
+import { View, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
+import { Text, Card, Button, Chip } from "react-native-paper";
+import { FileText, Download, Upload } from "lucide-react-native"; // ← Lucide icons
+import Header from "../../Components/layout/Header";
 
-// Mock Data
 const documents = [
   { id: 1, title: "January 2026 Summons", type: "summons", date: "Jan 03, 2026", size: "1.2 MB" },
   { id: 2, title: "Minutes - Dec 2025", type: "lodge", date: "Dec 18, 2025", size: "840 KB" },
@@ -13,11 +12,11 @@ const documents = [
   { id: 5, title: "December 2025 Summons", type: "summons", date: "Dec 01, 2025", size: "1.1 MB" },
 ];
 
-const typeStyles = {
-  summons: "bg-lodge-red text-white border-lodge-red",
-  lodge: "bg-gray-500 text-white border-gray-500",
-  region: "bg-lodge-navy text-white border-lodge-navy",
-  grand: "bg-lodge-royal text-white border-lodge-royal",
+const typeColors = {
+  summons: "#c62828",
+  lodge: "#616161",
+  region: "#1a237e",
+  grand: "#4a148c",
 };
 
 const typeLabels = {
@@ -28,78 +27,158 @@ const typeLabels = {
 };
 
 export default function Documents() {
+  const [tab, setTab] = useState("all");
+
+  const filteredDocs =
+    tab === "all" ? documents : documents.filter(d => d.type === tab);
+
   return (
-    <MobileLayout>
-      <div className="px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="font-serif text-2xl font-bold text-foreground">Documents</h1>
-           {/* Only visible for secretary role - mocked here */}
-          <Button size="icon" variant="outline" className="h-8 w-8 rounded-full">
-            <Upload className="h-4 w-4" />
-          </Button>
-        </div>
+    <View style={styles.container}>
+      <Header />
 
-        <Tabs defaultValue="all" className="w-full">
-          <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-transparent gap-2 mb-6">
-            {["all", "summons", "lodge", "region", "grand"].map((tab) => (
-              <TabsTrigger 
-                key={tab} 
-                value={tab}
-                className="rounded-full border border-border bg-card px-4 py-1.5 text-xs data-[state=active]:bg-foreground data-[state=active]:text-background"
-              >
-                {tab === "grand" ? "Grand Lodge" : tab === "all" ? "All" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      {/* Header & Tabs */}
+      <View style={styles.fixedHeader}>
+        <View style={styles.headerRow}>
+          <Text variant="titleLarge" style={styles.heading}>
+            Documents
+          </Text>
+          <Button
+            mode="outlined"
+            compact
+            onPress={() => {}}
+            icon={() => <Upload color="#333" size={18} />}
+          />
+        </View>
 
-          <TabsContent value="all" className="space-y-4">
-            {documents.map((doc) => (
-              <DocumentCard key={doc.id} doc={doc} />
-            ))}
-          </TabsContent>
-          
-          {["summons", "lodge", "region", "grand"].map((type) => (
-            <TabsContent key={type} value={type} className="space-y-4">
-              {documents.filter(d => d.type === type).map((doc) => (
-                <DocumentCard key={doc.id} doc={doc} />
-              ))}
-            </TabsContent>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabs}
+        >
+          {["all", "summons", "lodge", "region", "grand"].map((t) => (
+            <Chip
+              key={t}
+              selected={tab === t}
+              onPress={() => setTab(t)}
+              style={styles.tabChip}
+            >
+              {t === "all" ? "All" : typeLabels[t]}
+            </Chip>
           ))}
-        </Tabs>
-      </div>
-    </MobileLayout>
+        </ScrollView>
+      </View>
+
+      {/* Document List */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {filteredDocs.map((doc) => (
+          <DocumentCard key={doc.id} doc={doc} />
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
 function DocumentCard({ doc }) {
-  const style = typeStyles[doc.type];
-  
   return (
-    <Card className="overflow-hidden hover:bg-muted/40 transition-colors border-l-4 border-l-transparent" style={{ 
-      borderLeftColor: doc.type === 'grand' ? 'var(--lodge-royal)' : 
-                     doc.type === 'region' ? 'var(--lodge-navy)' : 
-                     doc.type === 'summons' ? 'var(--lodge-red)' : 
-                     'var(--gray-500)'
-    }}>
-      <div className="p-4 flex items-center gap-4">
-        <div className={`h-10 w-10 rounded flex items-center justify-center shrink-0 ${style.replace('text-white', 'text-current bg-opacity-10')}`}>
-          <FileText className={`h-5 w-5 ${style.split(' ')[0].replace('bg-', 'text-')}`} />
-        </div>
-        
-        <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-sm text-foreground truncate">{doc.title}</h3>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-medium uppercase tracking-wider ${style.replace('border-', '')}`}>
-              {typeLabels[doc.type]}
-            </span>
-            <span className="text-xs text-muted-foreground">• {doc.date}</span>
-          </div>
-        </div>
+    <Card style={[styles.card, { borderLeftColor: typeColors[doc.type] }]}>
+      <Card.Content style={styles.cardContent}>
+        <View
+          style={[
+            styles.iconBox,
+            { backgroundColor: typeColors[doc.type] + "22" },
+          ]}
+        >
+          <FileText size={22} color={typeColors[doc.type]} />
+        </View>
 
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-          <Download className="h-4 w-4" />
-        </Button>
-      </div>
+        <View style={styles.info}>
+          <Text numberOfLines={1} style={styles.title}>
+            {doc.title}
+          </Text>
+
+          <View style={styles.meta}>
+            <Chip compact style={{ backgroundColor: typeColors[doc.type] }}>
+              <Text style={styles.chipText}>{typeLabels[doc.type]}</Text>
+            </Chip>
+            <Text style={styles.date}>• {doc.date}</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity>
+          <Download size={20} color="#666" />
+        </TouchableOpacity>
+      </Card.Content>
     </Card>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  fixedHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: "#fff",
+    zIndex: 1,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  heading: {
+    fontWeight: "700",
+  },
+  tabs: {
+    marginBottom: 8,
+  },
+  tabChip: {
+    marginRight: 8,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  card: {
+    marginBottom: 12,
+    borderLeftWidth: 4,
+  },
+  cardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  info: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  meta: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  chipText: {
+    fontSize: 10,
+    color: "#fff",
+  },
+  date: {
+    fontSize: 11,
+    opacity: 0.6,
+    marginLeft: 6,
+  },
+});

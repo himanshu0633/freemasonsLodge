@@ -1,8 +1,13 @@
-import MobileLayout from "@/components/layout/MobileLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2 } from "lucide-react";
+import React, { useState } from "react";
+import { View, ScrollView, StyleSheet } from "react-native";
+import {
+  Card,
+  Text,
+  Button,
+  Chip,
+} from "react-native-paper";
+import { CheckCircle, Clock } from "lucide-react-native"; // ← Lucide icons
+import Header from "../../Components/layout/Header";
 
 const workingOfficers = [
   { role: "Worshipful Master", name: "W.Bro. James Smith", status: "confirmed" },
@@ -14,63 +19,126 @@ const workingOfficers = [
 ];
 
 export default function Attendance() {
+  const [tab, setTab] = useState("officers");
+
   return (
-    <MobileLayout>
-      <div className="px-6 py-8">
-        <h1 className="font-serif text-2xl font-bold text-foreground mb-6">Attendance & Working</h1>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Header />
 
-        {/* User Status */}
-        <Card className="mb-8 border-primary/20 bg-primary/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm uppercase tracking-wider text-muted-foreground">Your Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Next Meeting: Jan 15</p>
-                <p className="text-sm text-muted-foreground">Response required</p>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="default" className="bg-primary hover:bg-primary/90">Attending</Button>
-                <Button size="sm" variant="outline">Apology</Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <Text variant="titleLarge" style={styles.heading}>
+        Attendance & Working
+      </Text>
 
-        {/* Working Distribution */}
-        <div className="space-y-4">
-           <h2 className="font-serif text-lg font-semibold">Working Officers</h2>
-           
-           <Tabs defaultValue="officers" className="w-full">
-            <TabsList className="w-full grid grid-cols-2 mb-4">
-              <TabsTrigger value="officers">Regular Officers</TabsTrigger>
-              <TabsTrigger value="extra">Additional Work</TabsTrigger>
-            </TabsList>
+      {/* User Status */}
+      <Card style={styles.statusCard}>
+        <Card.Title title="Your Status" />
+        <Card.Content>
+          <Text variant="bodyMedium">Next Meeting: Jan 15</Text>
+          <Text variant="bodySmall" style={{ opacity: 0.6 }}>
+            Response required
+          </Text>
 
-            <TabsContent value="officers" className="space-y-3">
-              {workingOfficers.map((officer, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
-                  <div>
-                    <p className="text-xs font-bold text-primary uppercase tracking-wider">{officer.role}</p>
-                    <p className="font-medium text-sm">{officer.name}</p>
-                  </div>
-                  {officer.status === 'confirmed' ? (
-                    <CheckCircle2 className="w-5 h-5 text-lodge-green" />
-                  ) : (
-                    <div className="h-2 w-2 rounded-full bg-lodge-gold animate-pulse" />
-                  )}
-                </div>
-              ))}
-            </TabsContent>
-            <TabsContent value="extra">
-              <div className="text-center py-8 text-muted-foreground">
-                No additional work assigned yet.
-              </div>
-            </TabsContent>
-           </Tabs>
-        </div>
-      </div>
-    </MobileLayout>
+          <View style={styles.row}>
+            <Button mode="contained" compact>
+              Attending
+            </Button>
+            <Button mode="outlined" compact>
+              Apology
+            </Button>
+          </View>
+        </Card.Content>
+      </Card>
+
+      <Text variant="titleMedium" style={styles.subHeading}>
+        Working Officers
+      </Text>
+
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <Chip
+          selected={tab === "officers"}
+          onPress={() => setTab("officers")}
+        >
+          Regular Officers
+        </Chip>
+        <Chip
+          selected={tab === "extra"}
+          onPress={() => setTab("extra")}
+        >
+          Additional Work
+        </Chip>
+      </View>
+
+      {tab === "officers" ? (
+        workingOfficers.map((officer, index) => (
+          <Card key={index} style={styles.officerCard}>
+            <Card.Content style={styles.officerRow}>
+              <View>
+                <Text variant="labelSmall" style={styles.role}>
+                  {officer.role}
+                </Text>
+                <Text variant="bodyMedium">{officer.name}</Text>
+              </View>
+
+              {officer.status === "confirmed" ? (
+                <CheckCircle color="#2e7d32" size={22} />
+              ) : (
+                <Clock color="#f9a825" size={22} />
+              )}
+            </Card.Content>
+          </Card>
+        ))
+      ) : (
+        <View style={styles.empty}>
+          <Text variant="bodyMedium" style={{ opacity: 0.6 }}>
+            No additional work assigned yet.
+          </Text>
+        </View>
+      )}
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+  },
+  heading: {
+    fontWeight: "700",
+    marginBottom: 16,
+  },
+  subHeading: {
+    marginVertical: 12,
+    fontWeight: "600",
+  },
+  statusCard: {
+    marginBottom: 20,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+  },
+  tabs: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
+  officerCard: {
+    marginBottom: 10,
+  },
+  officerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  role: {
+    textTransform: "uppercase",
+    fontWeight: "700",
+    opacity: 0.7,
+  },
+  empty: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+});

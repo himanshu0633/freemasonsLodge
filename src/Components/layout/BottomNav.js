@@ -1,17 +1,47 @@
-import React from "react";
-import BottomNav from "./BottomNav";
+import * as React from "react";
+import { BottomNavigation } from "react-native-paper";
+import { Home as HomeIcon, FileText, MessageSquare, Calendar, ClipboardCheck, CreditCard } from "lucide-react-native";
 
+import Home from "../../Screen/Home";
+import Documents from "../../Screen/Documents";
+import Chat from "../../Screen/Chat";
+import CalendarPage from "../../Screen/Calendar";
+import Attendance from "../../Screen/Attendance";
+import Payments from "../../Screen/Payments";
 
+export default function BottomNav() {
+  const [index, setIndex] = React.useState(0);
 
-export default function MobileLayout({ children }) {
+  const [routes] = React.useState([
+    { key: "home", title: "Home", icon: HomeIcon },
+    { key: "docs", title: "Docs", icon: FileText },
+    { key: "chat", title: "Chat", icon: MessageSquare },
+    { key: "calendar", title: "Calendar", icon: Calendar },
+    { key: "attendance", title: "Attend", icon: ClipboardCheck },
+    { key: "payments", title: "Pay", icon: CreditCard },
+  ]);
+
+  const renderScene = BottomNavigation.SceneMap({
+    home: Home,
+    docs: Documents,
+    chat: Chat,
+    calendar: CalendarPage,
+    attendance: Attendance,
+    payments: Payments,
+  });
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans flex justify-center bg-zinc-100 dark:bg-zinc-900">
-      <div className="w-full max-w-md bg-background min-h-screen shadow-2xl relative flex flex-col pb-16 overflow-hidden">
-        <main className="flex-1 overflow-y-auto scrollbar-hide">
-          {children}
-        </main>
-        <BottomNav />
-      </div>
-    </div>
+    <BottomNavigation
+      navigationState={{ index, routes }}
+      onIndexChange={setIndex}
+      renderScene={renderScene}
+      barStyle={{ backgroundColor: "#fff" }}
+      renderIcon={({ route, color }) => {
+        const IconComponent = route.icon;
+        return <IconComponent color={color} size={22} />;
+      }}
+      activeColor="#2563eb"
+      inactiveColor="#6b7280"
+    />
   );
 }
