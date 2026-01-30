@@ -10,6 +10,7 @@ import Attendance from "./src/Screen/Attendance";
 import Payments from "./src/Screen/Payments";
 import Gallery from "./src/Screen/Gallery";
 import AuthPage from "./src/Screen/Auth";
+import LoginScreen from "./src/Screen/Login";
 
 const Stack = createNativeStackNavigator();
 
@@ -25,6 +26,8 @@ export default function Router() {
         <Stack.Screen name="Attendance" component={Attendance} />
         <Stack.Screen name="Payments" component={Payments} />
         <Stack.Screen name="Gallery" component={Gallery} />
+         <Stack.Screen name="Login" component={LoginScreen} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

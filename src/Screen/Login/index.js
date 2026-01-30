@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { ArrowLeft, Mail, Smartphone, Check } from 'lucide-react-native';
-import axiosInstance from '../../Components/AxiosInstance';
+// import axiosInstance from '../../Components/AxiosInstance';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -371,7 +371,7 @@ const LoginScreen = () => {
           {/* Illustration */}
           <View style={styles.illustrationContainer}>
             <Image
-              source={require('../../assets/loginicon.png')}
+              // source={require('../../assets/loginicon.png')}
               style={styles.illustrationImage}
               resizeMode="contain"
             />

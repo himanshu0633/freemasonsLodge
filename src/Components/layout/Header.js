@@ -4,8 +4,11 @@ import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Crown, Bell, User } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 
-export default function Header({ navigation }) {
+export default function Header() {
+  const navigation = useNavigation();
+  
   return (
     <SafeAreaView style={{ backgroundColor: '#fff' }}>
       <View style={styles.header}>
@@ -24,7 +27,7 @@ export default function Header({ navigation }) {
             <Bell size={24} color="#333" />
             <View style={styles.badge} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.iconButton}>
             <User size={24} color="#333" />
           </TouchableOpacity>
         </View>
