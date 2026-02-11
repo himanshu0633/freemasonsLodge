@@ -78,7 +78,7 @@ export default function SplashScreen({ onAnimationComplete }) {
         >
           <View style={styles.logoWrapper}>
             <Image
-              source={require('../../assests/logo.jpeg')}
+              source={require('../../assets/logo.jpeg')}
               style={styles.logoImage}
               resizeMode="contain"
             />

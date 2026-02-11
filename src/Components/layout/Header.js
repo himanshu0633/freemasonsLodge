@@ -14,7 +14,7 @@ export default function Header() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoContainer}>
-            <Image source={require('../../assests/logo.jpeg')} style={styles.logo} />
+            <Image source={require('../../assets/logo.jpeg')} style={styles.logo} />
           </View>
           <View>
             <Text style={styles.title}>Freemason</Text>
