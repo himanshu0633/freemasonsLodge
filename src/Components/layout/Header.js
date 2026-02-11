@@ -1,6 +1,6 @@
 // Header.js
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Crown, Bell, User } from 'lucide-react-native';
@@ -14,10 +14,10 @@ export default function Header() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoContainer}>
-            <Crown size={28} color="#8B0000" />
+            <Image source={require('../../assests/logo.jpeg')} style={styles.logo} />
           </View>
           <View>
-            <Text style={styles.title}>Freesman</Text>
+            <Text style={styles.title}>Freemason</Text>
             <Text style={styles.subtitle}>Lodge Management</Text>
           </View>
         </View>
@@ -66,6 +66,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E8E8E8',
+  },
+  logo  : {
+    width: 40,
+    height: 40
   },
   title: {
     fontSize: 18,

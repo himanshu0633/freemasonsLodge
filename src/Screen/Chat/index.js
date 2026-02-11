@@ -3,6 +3,7 @@ import { View, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
 import { Text, Avatar, TextInput, Badge } from "react-native-paper";
 import { Plus, Search } from "lucide-react-native"; // ← Lucide icons
 import Header from "../../Components/layout/Header";
+import { useNavigation } from "@react-navigation/native";
 
 const chats = [
   { id: 1, name: "Lodge Harmony 341", lastMessage: "Brethren, remember the rehearsal tomorrow.", time: "10:30 AM", unread: 3, isGroup: true },
@@ -13,6 +14,7 @@ const chats = [
 
 export default function Chat() {
   const [search, setSearch] = useState("");
+    const navigation = useNavigation();
 
   return (
     <ScrollView style={styles.container}>
@@ -41,7 +43,7 @@ export default function Chat() {
       {/* Chat List */}
       <ScrollView>
         {chats.map((chat) => (
-          <TouchableOpacity key={chat.id} style={styles.chatRow}>
+          <TouchableOpacity onPress={() => navigation.navigate('ChatScreen')} key={chat.id} style={styles.chatRow}>
             <Avatar.Text
               size={48}
               label={chat.isGroup ? "G" : chat.name.charAt(0)}
