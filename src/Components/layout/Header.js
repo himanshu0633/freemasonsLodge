@@ -17,8 +17,8 @@ export default function Header() {
             <Image source={require('../../assets/logo.jpeg')} style={styles.logo} />
           </View>
           <View>
-            <Text style={styles.title}>Freemason</Text>
-            <Text style={styles.subtitle}>Lodge Management</Text>
+            {/* <Text style={styles.title}>Freemason</Text>
+            <Text style={styles.subtitle}>Lodge Management</Text> */}
           </View>
         </View>
 

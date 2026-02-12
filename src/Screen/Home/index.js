@@ -36,8 +36,8 @@ export default function Home() {
 
           </View>
           <View style={styles.lodgeInfo}>
-            <Text style={styles.lodgeName}>Lodge Harmony</Text>
-            <Text style={styles.lodgeDetails}>No. 341 • Est. 1892</Text>
+            <Text style={styles.lodgeName}>Lodge Mother India</Text>
+            <Text style={styles.lodgeDetails}>No. 110 • Est. 1935</Text>
             <View style={styles.statusBadge}>
               <View style={styles.statusDot} />
               <Text style={styles.statusText}>Active Member</Text>

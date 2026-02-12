@@ -347,7 +347,7 @@ export default function Documents() {
           <View>
             <Text style={styles.headerTitle}>Documents</Text>
             <Text style={styles.headerSubtitle}>
-              {filteredDocs.length} {filteredDocs.length === 1 ? 'document' : 'documents'} available
+              {filteredDocs?.length} {filteredDocs?.length === 1 ? 'document' : 'documents'} available
             </Text>
           </View>
           <TouchableOpacity
@@ -408,7 +408,7 @@ export default function Documents() {
               <Text style={styles.retryButtonText}>Try Again</Text>
             </TouchableOpacity>
           </View>
-        ) : filteredDocs.length === 0 ? (
+        ) : filteredDocs?.length === 0 ? (
           <View style={styles.centerContent}>
             <FilePlus size={48} color="#94a3b8" />
             <Text style={styles.emptyText}>No documents found</Text>
@@ -428,7 +428,7 @@ export default function Documents() {
             </TouchableOpacity>
           </View>
         ) : (
-          filteredDocs.map((doc, index) => {
+          filteredDocs?.map((doc, index) => {
             const DocTypeIcon = typeIcons[doc.documentType] || FileText;
             return (
               <Card key={doc._id} style={[styles.card, index === 0 && styles.firstCard]}>
