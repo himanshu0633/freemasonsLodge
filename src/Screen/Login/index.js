@@ -18,6 +18,7 @@ import { ArrowLeft, Mail, Smartphone, Lock, User } from 'lucide-react-native';
 import axiosInstance from '../../axiosInstance'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import axios from 'axios';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 375;
@@ -83,68 +84,85 @@ const LoginScreen = () => {
   };
 
   // 1. Register User
-  const handleRegister = async () => {
-    // Validate all fields
-    const errors = [];
-    
-    if (!registerData.firstName.trim()) errors.push('First name is required');
-    if (!registerData.lastName.trim()) errors.push('Last name is required');
-    if (!validateEmail(registerData.email)) errors.push('Please enter a valid email address');
-    if (!validateMobile(registerData.mobile)) errors.push('Please enter a valid 10-digit mobile number');
-    if (!validatePassword(registerData.password)) errors.push('Password must be at least 6 characters long');
-    if (registerData.password !== registerData.confirmPassword) errors.push('Passwords do not match');
+const handleRegister = async () => {
+  // Validate all fields
+  const errors = [];
+  
+  if (!registerData.firstName.trim()) errors.push('First name is required');
+  if (!registerData.lastName.trim()) errors.push('Last name is required');
+  if (!validateEmail(registerData.email)) errors.push('Please enter a valid email address');
+  if (!validateMobile(registerData.mobile)) errors.push('Please enter a valid 10-digit mobile number');
+  if (!validatePassword(registerData.password)) errors.push('Password must be at least 6 characters long');
+  if (registerData.password !== registerData.confirmPassword) errors.push('Passwords do not match');
 
-    if (errors.length > 0) {
-      setError(errors[0]);
-      return;
-    }
+  if (errors.length > 0) {
+    setError(errors[0]);
+    return;
+  }
 
-    setIsSubmitting(true);
-    setError(null);
+  setIsSubmitting(true);
+  setError(null);
 
-    try {
-      // Send only required fields
-      const response = await axiosInstance.post('/api/users/register', {
-        firstName: registerData.firstName,
-        lastName: registerData.lastName,
-        email: registerData.email,
-        mobile: registerData.mobile,
-        password: registerData.password
-        // No optional fields sent - backend will use defaults
-      });
+  console.log("Registration data being sent:", registerData);
+  
+  try {
+    // FIXED: Use '/register' not '/api/register' because baseURL already has '/api'
+    const response = await axiosInstance.post('/register', {
+      firstName: registerData.firstName,
+      lastName: registerData.lastName,
+      email: registerData.email,
+      mobile: registerData.mobile,
+      password: registerData.password
+    });
 
-      if (response.data.success) {
-        setSuccessMessage('Registration successful! Please verify your email with OTP.');
-        
-        // Save temporary token for verification
-        await AsyncStorage.setItem('tempToken', response.data.data.token);
-        await AsyncStorage.setItem('verificationEmail', registerData.email);
-        
-        setOtpData({ 
-          ...otpData, 
-          email: registerData.email 
-        });
-        setActiveTab('verifyEmail');
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
+    console.log("Registration response:", response.data);
+
+    if (response.data.success) {
+      setSuccessMessage('Registration successful! Please verify your email with OTP.');
       
-      // Handle specific error cases
-      if (error.response?.status === 400) {
-        if (error.response?.data?.message.includes('already')) {
-          setError(error.response.data.message);
-        } else if (error.response?.data?.errors) {
-          setError(error.response.data.errors[0]);
-        } else {
-          setError(error.response?.data?.message || 'Registration failed');
-        }
-      } else {
-        setError('Registration failed. Please try again.');
+      // Save temporary token for verification
+      if (response.data.data?.token) {
+        await AsyncStorage.setItem('tempToken', response.data.data.token);
       }
-    } finally {
-      setIsSubmitting(false);
+      await AsyncStorage.setItem('verificationEmail', registerData.email);
+      
+      setOtpData({ 
+        ...otpData, 
+        email: registerData.email,
+        otp: '' // Clear any existing OTP
+      });
+      setActiveTab('verifyEmail');
     }
-  };
+  } catch (error) {
+    console.error('Registration error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.config?.data
+      }
+    });
+    
+    // Handle specific error cases
+    if (error.response?.status === 400) {
+      if (error.response?.data?.message?.includes('already')) {
+        setError(error.response.data.message);
+      } else if (error.response?.data?.errors) {
+        setError(error.response.data.errors[0]);
+      } else {
+        setError(error.response?.data?.message || 'Registration failed');
+      }
+    } else if (error.code === 'ECONNREFUSED') {
+      setError('Cannot connect to server. Please check if the server is running.');
+    } else {
+      setError('Registration failed. Please try again.');
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // 2. Verify Email with OTP
   const handleVerifyEmail = async () => {
@@ -157,7 +175,7 @@ const LoginScreen = () => {
     setError(null);
 
     try {
-      const response = await axiosInstance.post('/api/users/verify-email', {
+      const response = await axiosInstance.post('/verify-email', {
         email: otpData.email,
         otp: otpData.otp,
       });
@@ -172,15 +190,15 @@ const LoginScreen = () => {
         await AsyncStorage.removeItem('verificationEmail');
         
         setSuccessMessage('Email verified successfully!');
-        Alert.alert('Success', 'Email verified successfully!', [
-          {
-            text: 'OK',
-            onPress: () => navigation.reset({
-              index: 0,
-              routes: [{ name: 'Dashboard' }],
-            })
-          }
-        ]);
+        setOtpData({
+  email: '',
+  otp: '',
+  newPassword: '',
+  confirmPassword: '',
+});
+
+// switch to login screen
+setActiveTab('login');
       }
     } catch (error) {
       console.error('Verify email error:', error);
@@ -236,10 +254,11 @@ const LoginScreen = () => {
     setError(null);
 
     try {
-      const response = await axiosInstance.post('/api/users/login', {
+      const response = await axiosInstance.post('/login', {
         email: loginData.email,
         password: loginData.password,
       });
+
 
       if (response.data.success) {
         // Save token and user data
@@ -252,7 +271,7 @@ const LoginScreen = () => {
         setTimeout(() => {
           navigation.reset({
             index: 0,
-            routes: [{ name: 'Dashboard' }],
+            routes: [{ name: 'Main' }],
           });
         }, 500);
       }

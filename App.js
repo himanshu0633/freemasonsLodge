@@ -13,6 +13,7 @@ import SplashScreen from "./src/Screen/Splash";
 
 const Stack = createNativeStackNavigator();
 
+
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
 
