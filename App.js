@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { StatusBar, Platform } from "react-native";
+import { StatusBar } from "react-native";
 
 import { Provider as PaperProvider } from "react-native-paper";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -12,7 +12,6 @@ import ChatScreen from "./src/Screen/Chat/chatScreen";
 import SplashScreen from "./src/Screen/Splash";
 import AdminEventDashboard from "./src/Screen/Attendance/adminevent";
 import NotificationPage from "./src/Screen/Notification";
-import messaging from "@react-native-firebase/messaging";
 
 
 import {
@@ -21,13 +20,15 @@ import {
   AuthorizationStatus,
 } from "@react-native-firebase/messaging";
 import { getApp } from "@react-native-firebase/app";
+import { PermissionsAndroid, Platform } from "react-native";
+import messaging from "@react-native-firebase/messaging";
 
 import notifee, { AndroidImportance } from "@notifee/react-native";
 
 const Stack = createNativeStackNavigator();
 
 messaging().setBackgroundMessageHandler(async remoteMessage => {
-  console.log("📩 FCM Background Message:", remoteMessage);
+  
 
   await notifee.displayNotification({
     title: remoteMessage.notification?.title || "Notification",
@@ -41,26 +42,31 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
 
 
 /* ---------------- PERMISSION ---------------- */
+
 export async function requestUserPermission() {
   try {
-    const app = getApp();
-    const messagingInstance = getMessaging(app);
+    // 🔔 ANDROID 13+
+    if (Platform.OS === "android" && Platform.Version >= 33) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+      );
 
-    const authStatus = await requestPermission(messagingInstance);
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        console.log("❌ Android notification permission denied");
+        return false;
+      }
+    }
 
+    // 🔔 Firebase (required)
+    const authStatus = await messaging().requestPermission();
     const enabled =
       authStatus === AuthorizationStatus.AUTHORIZED ||
       authStatus === AuthorizationStatus.PROVISIONAL;
 
-    console.log(
-      enabled
-        ? "✅ Notification permission enabled"
-        : "❌ Notification permission not granted"
-    );
-
+    console.log("Notification permission:", enabled);
     return enabled;
-  } catch (error) {
-    console.log("❌ Permission request error:", error);
+  } catch (e) {
+    console.log("Permission error:", e);
     return false;
   }
 }
@@ -78,37 +84,24 @@ async function createNotificationChannel() {
   }
 }
 
-/* ---------------- TEST NOTIFICATION ---------------- */
-async function showTestNotification() {
-  if (Platform.OS === "android") {
-    await notifee.displayNotification({
-      title: "Notifications Enabled 🎉",
-      body: "You will now receive notifications",
-      android: {
-        channelId: "default",
-      },
-    });
-
-    console.log("✅ Test notification shown");
-  }
-}
-
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    (async () => {
+  if (!showSplash) {
+    setTimeout(async () => {
       const granted = await requestUserPermission();
       if (granted) {
         await createNotificationChannel();
-        await showTestNotification(); // 🔥 THIS flips system toggle ON
       }
-    })();
-  }, []);
+    }, 500); // small delay ensures UI is visible
+  }
+}, [showSplash]);
+
   useEffect(() => {
   // 🔔 FOREGROUND NOTIFICATIONS
   const unsubscribe = messaging().onMessage(async remoteMessage => {
-    console.log("📩 FCM Foreground Message:", remoteMessage);
+   
 
     await notifee.displayNotification({
       title: remoteMessage.notification?.title || "Notification",
@@ -123,14 +116,6 @@ export default function App() {
   return unsubscribe;
 }, []);
 
-
-useEffect(() => {
-  messaging()
-    .getToken()
-    .then(token => {
-      console.log("🔥 DEVICE FCM TOKEN:", token);
-    });
-}, []);
 
 
   if (showSplash) {

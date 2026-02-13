@@ -32,7 +32,10 @@ export default function Home() {
         <View style={styles.lodgeBanner}>
           <View style={styles.lodgeCrestContainer}>
             
-            <Crown size={48} color="#FFF" />
+           <Image
+                         source={require('../../assets/applogo.jpeg')}
+                         style={styles.logo}
+                       />
 
           </View>
           <View style={styles.lodgeInfo}>
@@ -290,6 +293,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
+  },
+  logo: {
+    width: 68,
+    height: 68,
+    borderRadius: 30,
   },
   lodgeCrestContainer: {
     width: 72,
