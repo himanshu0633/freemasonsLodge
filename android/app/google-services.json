@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "6900890563",
+    "project_id": "freesman-lodge-app",
+    "storage_bucket": "freesman-lodge-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:6900890563:android:b697b82effc65f9e7adb76",
+        "android_client_info": {
+          "package_name": "com.freemasonslodge"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVFEArhw2gH0kARTjYqKX_DV_zz1dnl30"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

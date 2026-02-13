@@ -8,6 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import LinearGradient from 'react-native-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
@@ -64,49 +65,58 @@ export default function SplashScreen({ onAnimationComplete }) {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {/* Logo with popup animation */}
-        <Animated.View
-          style={[
-            styles.logoContainer,
-            {
-              opacity: logoOpacity,
-              transform: [{ scale: logoScale }],
-            },
-          ]}
-        >
-          <View style={styles.logoWrapper}>
-            <Image
-              source={require('../../assets/logo.jpeg')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
-        </Animated.View>
+    <LinearGradient
+      colors={['#C21807', '#8B0000', '#660000']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          {/* Logo with popup animation */}
+          <Animated.View
+            style={[
+              styles.logoContainer,
+              {
+                opacity: logoOpacity,
+                transform: [{ scale: logoScale }],
+              },
+            ]}
+          >
+            <View style={styles.logoWrapper}>
+              <Image
+                source={require('../../assets/logo.jpeg')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+          </Animated.View>
 
-        {/* App Name with fade in animation */}
-        <Animated.View
-          style={[
-            styles.textContainer,
-            {
-              opacity: textOpacity,
-              transform: [{ translateY: textTranslateY }],
-            },
-          ]}
-        >
-          <Text style={styles.appName}>FREEMASON</Text>
-          <Text style={styles.appSubtitle}>LODGE MANAGEMENT</Text>
-        </Animated.View>
-      </View>
-    </SafeAreaView>
+          {/* App Name with fade in animation */}
+          <Animated.View
+            style={[
+              styles.textContainer,
+              {
+                opacity: textOpacity,
+                transform: [{ translateY: textTranslateY }],
+              },
+            ]}
+          >
+            <Text style={styles.appName}>FREEMASON</Text>
+            <Text style={styles.appSubtitle}>LODGE MANAGEMENT</Text>
+          </Animated.View>
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#1A237E',
   },
   content: {
     flex: 1,

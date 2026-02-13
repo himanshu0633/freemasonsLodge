@@ -1,842 +1,668 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   ScrollView,
   StyleSheet,
-  RefreshControl,
   Alert,
-  Modal,
-  TextInput,
+  RefreshControl,
+  TouchableOpacity,
+  Dimensions,
 } from "react-native";
 import {
   Card,
   Text,
   Button,
   Chip,
-  Avatar,
-  IconButton,
-  Badge,
   ActivityIndicator,
+  Avatar,
   Divider,
-  SegmentedButtons,
+  IconButton,
 } from "react-native-paper";
 import {
   CheckCircle,
   Clock,
   XCircle,
-  Users,
   Calendar,
   MapPin,
-  Plus,
-  Edit,
-  Trash2,
-  Download,
-  Filter,
-  Eye,
-  UserCheck,
-  UserX,
-  UserMinus,
-  BarChart3,
+  Users,
+  ChevronRight,
+  TrendingUp,
 } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Header from "../../Components/layout/Header";
-import { format } from "date-fns";
 import axiosInstance from "../../axiosInstance";
+import { format, isPast, isToday, isFuture } from "date-fns";
 
-// axiosInstance Service
-// import axiosInstance from "../../Services/axiosInstance";
+const THEME = "#C21807";
+const { width } = Dimensions.get("window");
 
-export default function AdminEventDashboard() {
-  // State Management
-  const [activeTab, setActiveTab] = useState("events");
+export default function Attendance() {
   const [events, setEvents] = useState([]);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState("create"); // create, edit, view
-  const [filterStatus, setFilterStatus] = useState("all");
-  
-  // Event Form State
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    date: "",
-    time: "",
-    location: "",
-    remark: "",
-  });
+  const [userId, setUserId] = useState(null);
+  const [expandedPast, setExpandedPast] = useState(false);
 
-  // Statistics State
-  const [stats, setStats] = useState({
-    totalEvents: 0,
-    totalAttendees: 0,
-    totalResponses: 0,
-    avgAttendance: 0,
-  });
-
-  // Load Events on Mount
   useEffect(() => {
-    fetchEvents();
-    fetchStats();
+    loadUser();
   }, []);
 
-  // Fetch All Events
+  useEffect(() => {
+    if (userId) {
+      fetchEvents();
+    }
+  }, [userId]);
+
+  const loadUser = async () => {
+    try {
+      const storedUser = await AsyncStorage.getItem("userData");
+      if (!storedUser) {
+        Alert.alert("Error", "User data not found");
+        return;
+      }
+      const parsedUser = JSON.parse(storedUser);
+      setUserId(parsedUser._id);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load user data");
+    }
+  };
+
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get("/events/admin/summary/all");
-      setEvents(response.data);
-    } catch (error) {
-      Alert.alert("Error", "Failed to fetch events");
+      const res = await axiosInstance.get("/events/admin/all");
+      setEvents(res.data?.events || []);
+    } catch {
+      Alert.alert("Error", "Failed to load events");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch Statistics
-  const fetchStats = async () => {
-    try {
-      const response = await axiosInstance.get("/events/admin/stats");
-      setStats(response.data);
-    } catch (error) {
-      console.error("Stats error:", error);
-    }
-  };
-
-  // Refresh Handler
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchEvents(), fetchStats()]);
+    await fetchEvents();
     setRefreshing(false);
-  };
+  }, []);
 
-  // Create Event
-  const createEvent = async () => {
+  const markAttendance = async (eventId, status) => {
+    if (!userId) {
+      Alert.alert("Error", "User not loaded yet");
+      return;
+    }
+
     try {
-      setLoading(true);
-      await axiosInstance.post("/events", formData);
-      Alert.alert("Success", "Event created successfully");
-      setModalVisible(false);
-      resetForm();
+      await axiosInstance.post(`/events/${eventId}/attendance`, {
+        status,
+        userId,
+      });
       fetchEvents();
     } catch (error) {
-      Alert.alert("Error", error.response?.data?.message || "Failed to create event");
-    } finally {
-      setLoading(false);
+      Alert.alert("Error", "Could not update attendance");
     }
   };
 
-  // Update Event
-  const updateEvent = async () => {
-    try {
-      setLoading(true);
-      await axiosInstance.put(`/events/${selectedEvent._id}`, formData);
-      Alert.alert("Success", "Event updated successfully");
-      setModalVisible(false);
-      resetForm();
-      fetchEvents();
-    } catch (error) {
-      Alert.alert("Error", "Failed to update event");
-    } finally {
-      setLoading(false);
+  const isEventPast = (eventDate) => {
+    const eventDateTime = new Date(eventDate);
+    return isPast(eventDateTime) && !isToday(eventDateTime);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "attending":
+        return "#2e7d32";
+      case "not_attending":
+        return "#c62828";
+      case "maybe":
+        return "#f9a825";
+      default:
+        return "#aaa";
     }
   };
 
-  // Delete Event
-  const deleteEvent = async (eventId) => {
-    Alert.alert(
-      "Delete Event",
-      "Are you sure you want to delete this event?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await axiosInstance.delete(`/events/${eventId}`);
-              Alert.alert("Success", "Event deleted successfully");
-              fetchEvents();
-            } catch (error) {
-              Alert.alert("Error", "Failed to delete event");
-            }
-          },
-        },
-      ]
+  const renderStatusIcon = (status) => {
+    const color = getStatusColor(status);
+    if (status === "attending") return <CheckCircle size={16} color={color} />;
+    if (status === "not_attending") return <XCircle size={16} color={color} />;
+    if (status === "maybe") return <Clock size={16} color={color} />;
+    return <Clock size={16} color="#aaa" />;
+  };
+
+  const getStatusText = (status) => {
+    if (status === "attending") return "Going";
+    if (status === "not_attending") return "Not Going";
+    if (status === "maybe") return "Maybe";
+    return "Not Responded";
+  };
+
+  // Separate events
+  const upcomingEvents = events.filter(event => !isEventPast(event.date));
+  const pastEvents = events.filter(event => isEventPast(event.date));
+  
+  // Get next upcoming event
+  const nextEvent = upcomingEvents.length > 0 
+    ? upcomingEvents.sort((a, b) => new Date(a.date) - new Date(b.date))[0] 
+    : null;
+
+  const renderEventCard = (event, isNextEvent = false) => {
+    const eventDate = new Date(event.date);
+    const isPastEvent = isEventPast(event.date);
+    const isTodayEvent = isToday(eventDate);
+    
+    return (
+      <Card 
+        key={event._id} 
+        style={[
+          styles.eventCard,
+          isNextEvent && styles.nextEventCard,
+          isTodayEvent && styles.todayEventCard,
+          isPastEvent && styles.pastEventCard,
+        ]}
+      >
+        <Card.Content>
+          {/* Event Header with Status Badge */}
+          <View style={styles.eventHeader}>
+            <View style={styles.eventHeaderLeft}>
+              <View style={styles.dateBadge}>
+                <Text style={styles.dateDay}>{format(eventDate, "dd")}</Text>
+                <Text style={styles.dateMonth}>{format(eventDate, "MMM")}</Text>
+              </View>
+              <View style={styles.eventTitleContainer}>
+                <Text variant="titleMedium" style={styles.eventTitle}>
+                  {event.title}
+                </Text>
+                <View style={styles.eventMeta}>
+                  <View style={styles.metaItem}>
+                    <Clock size={14} color="#666" />
+                    <Text variant="bodySmall" style={styles.metaText}>
+                      {format(eventDate, "h:mm a")}
+                    </Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <MapPin size={14} color="#666" />
+                    <Text variant="bodySmall" style={styles.metaText} numberOfLines={1}>
+                      {event.location}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+            {!isPastEvent && event.myStatus && (
+              <View style={[styles.statusChip, { backgroundColor: getStatusColor(event.myStatus) + '20' }]}>
+                {renderStatusIcon(event.myStatus)}
+                <Text style={[styles.statusText, { color: getStatusColor(event.myStatus) }]}>
+                  {getStatusText(event.myStatus)}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Stats Section - Compact */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: "#2e7d32" }]} />
+              <Text style={styles.statLabel}>Yes</Text>
+              <Text style={styles.statValue}>{event.stats?.attending ?? 0}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: "#f9a825" }]} />
+              <Text style={styles.statLabel}>Maybe</Text>
+              <Text style={styles.statValue}>{event.stats?.maybe ?? 0}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={[styles.statDot, { backgroundColor: "#c62828" }]} />
+              <Text style={styles.statLabel}>No</Text>
+              <Text style={styles.statValue}>{event.stats?.notAttending ?? 0}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Users size={14} color="#666" />
+              <Text style={styles.statLabel}>Total</Text>
+              <Text style={styles.statValue}>
+                {(event.stats?.attending ?? 0) + (event.stats?.maybe ?? 0) + (event.stats?.notAttending ?? 0)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Action Buttons - Only for upcoming events and not past */}
+          {!isPastEvent && (
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  event.myStatus === "attending" && styles.actionButtonActive,
+                  { borderColor: THEME }
+                ]}
+                onPress={() => markAttendance(event._id, "attending")}
+              >
+                <CheckCircle 
+                  size={18} 
+                  color={event.myStatus === "attending" ? THEME : "#666"} 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  event.myStatus === "attending" && styles.actionButtonTextActive
+                ]}>
+                  Yes
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  event.myStatus === "maybe" && styles.actionButtonActive,
+                  { borderColor: "#f9a825" }
+                ]}
+                onPress={() => markAttendance(event._id, "maybe")}
+              >
+                <Clock 
+                  size={18} 
+                  color={event.myStatus === "maybe" ? "#f9a825" : "#666"} 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  event.myStatus === "maybe" && { color: "#f9a825" }
+                ]}>
+                  Maybe
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  event.myStatus === "not_attending" && styles.actionButtonActive,
+                  { borderColor: "#c62828" }
+                ]}
+                onPress={() => markAttendance(event._id, "not_attending")}
+              >
+                <XCircle 
+                  size={18} 
+                  color={event.myStatus === "not_attending" ? "#c62828" : "#666"} 
+                />
+                <Text style={[
+                  styles.actionButtonText,
+                  event.myStatus === "not_attending" && { color: "#c62828" }
+                ]}>
+                  No
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Past Event Label */}
+          {isPastEvent && (
+            <View style={styles.pastEventLabel}>
+              <Clock size={14} color="#999" />
+              <Text style={styles.pastEventText}>Past Event</Text>
+            </View>
+          )}
+        </Card.Content>
+      </Card>
     );
   };
 
-  // View Event Details
-  const viewEventDetails = async (event) => {
-    try {
-      setLoading(true);
-      const response = await axiosInstance.get(`/events/admin/report/${event._id}`);
-      setSelectedEvent(response.data);
-      setModalType("view");
-      setModalVisible(true);
-    } catch (error) {
-      Alert.alert("Error", "Failed to fetch event details");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Edit Event
-  const editEvent = (event) => {
-    setSelectedEvent(event);
-    setFormData({
-      title: event.title,
-      description: event.description || "",
-      date: event.date,
-      time: event.time,
-      location: event.location,
-      remark: event.remark || "",
-    });
-    setModalType("edit");
-    setModalVisible(true);
-  };
-
-  // Reset Form
-  const resetForm = () => {
-    setFormData({
-      title: "",
-      description: "",
-      date: "",
-      time: "",
-      location: "",
-      remark: "",
-    });
-    setSelectedEvent(null);
-  };
-
-  // Export Attendance
-  const exportAttendance = (event) => {
-    // Implement CSV export
-    Alert.alert("Export", `Exporting attendance for ${event.title}`);
-  };
-
-  // Filter Events
-  const filteredEvents = events.filter((event) => {
-    if (filterStatus === "all") return true;
-    if (filterStatus === "upcoming") {
-      return new Date(event.date) >= new Date();
-    }
-    if (filterStatus === "past") {
-      return new Date(event.date) < new Date();
-    }
-    return true;
-  });
-
-  // Render Statistics Cards
-  const renderStatsCards = () => (
-    <View style={styles.statsGrid}>
-      <Card style={styles.statsCard}>
-        <Card.Content>
-          <Calendar color="#2196F3" size={24} />
-          <Text variant="headlineMedium">{stats.totalEvents}</Text>
-          <Text variant="bodySmall">Total Events</Text>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.statsCard}>
-        <Card.Content>
-          <UserCheck color="#4CAF50" size={24} />
-          <Text variant="headlineMedium">{stats.totalAttendees}</Text>
-          <Text variant="bodySmall">Total Attendees</Text>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.statsCard}>
-        <Card.Content>
-          <Users color="#FF9800" size={24} />
-          <Text variant="headlineMedium">{stats.totalResponses}</Text>
-          <Text variant="bodySmall">Responses</Text>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.statsCard}>
-        <Card.Content>
-          <BarChart3 color="#9C27B0" size={24} />
-          <Text variant="headlineMedium">{stats.avgAttendance}%</Text>
-          <Text variant="bodySmall">Avg Attendance</Text>
-        </Card.Content>
-      </Card>
-    </View>
-  );
-
-  // Render Event Card
-  const renderEventCard = (event) => (
-    <Card key={event._id} style={styles.eventCard}>
-      <Card.Content>
-        <View style={styles.eventHeader}>
-          <View style={styles.eventTitleSection}>
-            <Text variant="titleMedium" style={styles.eventTitle}>
-              {event.title}
-            </Text>
-            <Badge
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: new Date(event.date) >= new Date()
-                    ? "#4CAF50"
-                    : "#9E9E9E",
-                },
-              ]}
-            >
-              {new Date(event.date) >= new Date() ? "Upcoming" : "Past"}
-            </Badge>
-          </View>
-          <View style={styles.eventActions}>
-            <IconButton
-              icon={() => <Eye size={20} color="#2196F3" />}
-              onPress={() => viewEventDetails(event)}
-            />
-            <IconButton
-              icon={() => <Edit size={20} color="#FF9800" />}
-              onPress={() => editEvent(event)}
-            />
-            <IconButton
-              icon={() => <Trash2 size={20} color="#F44336" />}
-              onPress={() => deleteEvent(event._id)}
-            />
-          </View>
-        </View>
-
-        <View style={styles.eventDetails}>
-          <View style={styles.detailRow}>
-            <Calendar size={16} color="#666" />
-            <Text variant="bodySmall" style={styles.detailText}>
-              {format(new Date(event.date), "dd MMM yyyy")} at {event.time}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <MapPin size={16} color="#666" />
-            <Text variant="bodySmall" style={styles.detailText}>
-              {event.location}
-            </Text>
-          </View>
-        </View>
-
-        <Divider style={styles.divider} />
-
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <UserCheck size={16} color="#4CAF50" />
-            <Text variant="bodyMedium" style={styles.statNumber}>
-              {event.stats?.attending || 0}
-            </Text>
-            <Text variant="bodySmall">Attending</Text>
-          </View>
-          <View style={styles.statItem}>
-            <UserX size={16} color="#F44336" />
-            <Text variant="bodyMedium" style={styles.statNumber}>
-              {event.stats?.notAttending || 0}
-            </Text>
-            <Text variant="bodySmall">Not Attending</Text>
-          </View>
-          <View style={styles.statItem}>
-            <UserMinus size={16} color="#FF9800" />
-            <Text variant="bodyMedium" style={styles.statNumber}>
-              {event.stats?.maybe || 0}
-            </Text>
-            <Text variant="bodySmall">Maybe</Text>
-          </View>
-        </View>
-
-        <View style={styles.responseRate}>
-          <Text variant="bodySmall">
-            Response Rate: {Math.round((event.stats?.totalResponses / 50) * 100)}%
-          </Text>
-          <Button
-            mode="text"
-            onPress={() => exportAttendance(event)}
-            icon={() => <Download size={16} color="#2196F3" />}
-            compact
-          >
-            Export
-          </Button>
-        </View>
-      </Card.Content>
-    </Card>
-  );
-
-  // Render Event Details Modal
-  const renderEventModal = () => (
-    <Modal
-      visible={modalVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setModalVisible(false)}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text variant="titleLarge">
-              {modalType === "create"
-                ? "Create Event"
-                : modalType === "edit"
-                ? "Edit Event"
-                : "Event Details"}
-            </Text>
-            <IconButton
-              icon="close"
-              onPress={() => setModalVisible(false)}
-            />
-          </View>
-
-          <ScrollView>
-            {modalType === "view" && selectedEvent ? (
-              // View Mode
-              <View>
-                <Card style={styles.modalCard}>
-                  <Card.Content>
-                    <Text variant="titleMedium">{selectedEvent.eventTitle}</Text>
-                    <Text variant="bodyMedium">
-                      {format(new Date(selectedEvent.eventDate), "dd MMM yyyy")}
-                    </Text>
-
-                    <View style={styles.attendanceSummary}>
-                      <Text variant="titleSmall" style={styles.summaryTitle}>
-                        Attendance Summary
-                      </Text>
-                      
-                      <View style={styles.summaryStats}>
-                        <View style={styles.summaryItem}>
-                          <UserCheck color="#4CAF50" size={24} />
-                          <Text variant="headlineSmall">
-                            {selectedEvent.summary?.attending || 0}
-                          </Text>
-                          <Text>Attending</Text>
-                        </View>
-                        <View style={styles.summaryItem}>
-                          <UserX color="#F44336" size={24} />
-                          <Text variant="headlineSmall">
-                            {selectedEvent.summary?.notAttending || 0}
-                          </Text>
-                          <Text>Not Attending</Text>
-                        </View>
-                        <View style={styles.summaryItem}>
-                          <UserMinus color="#FF9800" size={24} />
-                          <Text variant="headlineSmall">
-                            {selectedEvent.summary?.maybe || 0}
-                          </Text>
-                          <Text>Maybe</Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    <Divider />
-
-                    {/* Attendees List */}
-                    <View style={styles.attendeesSection}>
-                      <SegmentedButtons
-                        value={filterStatus}
-                        onValueChange={setFilterStatus}
-                        buttons={[
-                          { value: "attending", label: "Attending" },
-                          { value: "not attending", label: "Apologies" },
-                          { value: "maybe", label: "Maybe" },
-                        ]}
-                      />
-
-                      <ScrollView style={styles.attendeesList}>
-                        {selectedEvent.attendees
-                          ?.filter((a) => a.status === filterStatus)
-                          .map((attendee, index) => (
-                            <View key={index} style={styles.attendeeItem}>
-                              <Avatar.Text
-                                size={40}
-                                label={attendee.user?.name
-                                  ?.split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
-                              />
-                              <View style={styles.attendeeInfo}>
-                                <Text variant="bodyMedium">
-                                  {attendee.user?.name}
-                                </Text>
-                                <Text variant="bodySmall">
-                                  {attendee.user?.email}
-                                </Text>
-                                <Text variant="bodySmall" style={styles.respondedAt}>
-                                  Responded:{" "}
-                                  {format(
-                                    new Date(attendee.respondedAt),
-                                    "dd MMM yyyy, hh:mm a"
-                                  )}
-                                </Text>
-                              </View>
-                            </View>
-                          ))}
-                      </ScrollView>
-                    </View>
-                  </Card.Content>
-                </Card>
-              </View>
-            ) : (
-              // Create/Edit Mode
-              <View style={styles.form}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Event Title"
-                  value={formData.title}
-                  onChangeText={(text) => setFormData({ ...formData, title: text })}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Description"
-                  multiline
-                  numberOfLines={4}
-                  value={formData.description}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, description: text })
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Date (YYYY-MM-DD)"
-                  value={formData.date}
-                  onChangeText={(text) => setFormData({ ...formData, date: text })}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Time"
-                  value={formData.time}
-                  onChangeText={(text) => setFormData({ ...formData, time: text })}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Location"
-                  value={formData.location}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, location: text })
-                  }
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Remark (Optional)"
-                  value={formData.remark}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, remark: text })
-                  }
-                />
-
-                <Button
-                  mode="contained"
-                  onPress={modalType === "create" ? createEvent : updateEvent}
-                  loading={loading}
-                  style={styles.submitButton}
-                >
-                  {modalType === "create" ? "Create Event" : "Update Event"}
-                </Button>
-              </View>
-            )}
-          </ScrollView>
-        </View>
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Header />
+        <ActivityIndicator size="large" color={THEME} />
       </View>
-    </Modal>
-  );
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.mainContainer}>
       <Header />
       
       <ScrollView
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME} />
         }
       >
         <View style={styles.content}>
-          {/* Header Section */}
-          <View style={styles.headerSection}>
-            <Text variant="headlineSmall" style={styles.mainTitle}>
-              Event Management
-            </Text>
-            <Button
-              mode="contained"
-              onPress={() => {
-                resetForm();
-                setModalType("create");
-                setModalVisible(true);
-              }}
-              icon={() => <Plus size={20} color="#fff" />}
-            >
-              New Event
-            </Button>
+          {/* Welcome Section */}
+          <View style={styles.welcomeSection}>
+            <View>
+              <Text style={styles.welcomeTitle}>Event Attendance</Text>
+              <Text style={styles.welcomeSubtitle}>
+                {upcomingEvents.length} upcoming event{upcomingEvents.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <Avatar.Icon 
+              size={50} 
+              icon="calendar-check" 
+              style={{ backgroundColor: THEME + '20' }}
+              color={THEME}
+            />
           </View>
 
-          {/* Statistics Cards */}
-          {renderStatsCards()}
-
-          {/* Tabs */}
-          <SegmentedButtons
-            value={activeTab}
-            onValueChange={setActiveTab}
-            buttons={[
-              { value: "events", label: "All Events" },
-              { value: "upcoming", label: "Upcoming" },
-              { value: "past", label: "Past Events" },
-            ]}
-            style={styles.tabButtons}
-          />
-
-          {/* Filter Chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterScroll}
-          >
-            <View style={styles.filterChips}>
-              <Chip
-                selected={filterStatus === "all"}
-                onPress={() => setFilterStatus("all")}
-                style={styles.filterChip}
-              >
-                All
-              </Chip>
-              <Chip
-                selected={filterStatus === "upcoming"}
-                onPress={() => setFilterStatus("upcoming")}
-                style={styles.filterChip}
-              >
-                Upcoming
-              </Chip>
-              <Chip
-                selected={filterStatus === "past"}
-                onPress={() => setFilterStatus("past")}
-                style={styles.filterChip}
-              >
-                Past
-              </Chip>
-              <Chip
-                selected={filterStatus === "high-response"}
-                onPress={() => setFilterStatus("high-response")}
-                style={styles.filterChip}
-              >
-                High Response
-              </Chip>
+          {/* Next Event Highlight */}
+          {nextEvent && (
+            <View style={styles.nextEventSection}>
+              <View style={styles.nextEventHeader}>
+                <TrendingUp size={20} color={THEME} />
+                <Text style={styles.nextEventTitle}>Next Upcoming</Text>
+              </View>
+              {renderEventCard(nextEvent, true)}
             </View>
-          </ScrollView>
+          )}
 
-          {/* Events List */}
-          {loading && !refreshing ? (
-            <ActivityIndicator size="large" style={styles.loader} />
-          ) : (
-            <View style={styles.eventsList}>
-              {filteredEvents.length === 0 ? (
-                <Card style={styles.emptyCard}>
-                  <Card.Content style={styles.emptyContent}>
-                    <Calendar size={48} color="#ccc" />
-                    <Text variant="bodyLarge" style={styles.emptyText}>
-                      No events found
-                    </Text>
-                    <Text variant="bodySmall" style={styles.emptySubtext}>
-                      Click "New Event" to create your first event
-                    </Text>
-                  </Card.Content>
-                </Card>
-              ) : (
-                filteredEvents.map(renderEventCard)
+          {/* Other Upcoming Events */}
+          {upcomingEvents.length > 1 && (
+            <View style={styles.upcomingSection}>
+              <Text style={styles.sectionTitle}>
+                Other Upcoming Events
+              </Text>
+              {upcomingEvents
+                .filter(event => event._id !== nextEvent?._id)
+                .map(event => renderEventCard(event))}
+            </View>
+          )}
+
+          {/* Past Events */}
+          {pastEvents.length > 0 && (
+            <View style={styles.pastSection}>
+              <TouchableOpacity 
+                style={styles.pastHeader}
+                onPress={() => setExpandedPast(!expandedPast)}
+              >
+                <View style={styles.pastHeaderLeft}>
+                  <Calendar size={20} color="#666" />
+                  <Text style={styles.sectionTitle}>
+                    Past Events ({pastEvents.length})
+                  </Text>
+                </View>
+                <IconButton
+                  icon={expandedPast ? "chevron-up" : "chevron-down"}
+                  size={24}
+                  color="#666"
+                />
+              </TouchableOpacity>
+              
+              {expandedPast && (
+                <View style={styles.pastList}>
+                  {pastEvents
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .map(event => renderEventCard(event))}
+                </View>
               )}
+            </View>
+          )}
+
+          {/* Empty State */}
+          {events.length === 0 && (
+            <View style={styles.emptyContainer}>
+              <Calendar size={64} color="#ccc" />
+              <Text style={styles.emptyTitle}>No Events Found</Text>
+              <Text style={styles.emptyText}>
+                There are no events scheduled at the moment.
+              </Text>
             </View>
           )}
         </View>
       </ScrollView>
-
-      {/* Event Modal */}
-      {renderEventModal()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  mainContainer: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
   content: {
     padding: 16,
   },
-  headerSection: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
+  welcomeSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  mainTitle: {
-    fontWeight: "700",
+  welcomeTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
   },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  nextEventSection: {
     marginBottom: 24,
   },
-  statsCard: {
-    flex: 1,
-    minWidth: "45%",
-    marginBottom: 8,
+  nextEventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  tabButtons: {
-    marginBottom: 16,
+  nextEventTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
+    color: THEME,
   },
-  filterScroll: {
-    marginBottom: 16,
+  upcomingSection: {
+    marginBottom: 24,
   },
-  filterChips: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  filterChip: {
-    marginRight: 8,
-  },
-  eventsList: {
-    gap: 16,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
   },
   eventCard: {
-    marginBottom: 8,
+    marginBottom: 12,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  nextEventCard: {
+    borderWidth: 2,
+    borderColor: THEME,
+    backgroundColor: '#fff',
+  },
+  todayEventCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: THEME,
+  },
+  pastEventCard: {
+    opacity: 0.8,
+    backgroundColor: '#fafafa',
   },
   eventHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
-  eventTitleSection: {
+  eventHeaderLeft: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  dateBadge: {
+    width: 50,
+    height: 50,
+    backgroundColor: THEME + '10',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateDay: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: THEME,
+  },
+  dateMonth: {
+    fontSize: 12,
+    color: THEME,
+    textTransform: 'uppercase',
+  },
+  eventTitleContainer: {
+    flex: 1,
   },
   eventTitle: {
-    fontWeight: "600",
+    fontWeight: '600',
+    marginBottom: 4,
+    color: '#333',
   },
-  statusBadge: {
-    paddingHorizontal: 8,
+  eventMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  eventActions: {
-    flexDirection: "row",
-  },
-  eventDetails: {
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  metaText: {
+    color: '#666',
+    fontSize: 12,
   },
-  detailText: {
-    color: "#666",
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
   },
-  divider: {
-    marginVertical: 12,
+  statusText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 12,
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f8f8',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 8,
   },
   statItem: {
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  statNumber: {
-    fontWeight: "700",
-    marginTop: 4,
+  statDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 4,
   },
-  responseRate: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
   },
-  loader: {
-    marginTop: 40,
+  statValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 2,
   },
-  emptyCard: {
-    marginTop: 20,
-  },
-  emptyContent: {
-    alignItems: "center",
-    padding: 40,
-  },
-  emptyText: {
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
     marginTop: 16,
-    fontWeight: "600",
   },
-  emptySubtext: {
-    marginTop: 8,
-    color: "#999",
-  },
-  modalContainer: {
+  actionButton: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    maxHeight: "90%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalCard: {
-    marginBottom: 16,
-  },
-  form: {
-    gap: 16,
-    paddingBottom: 20,
-  },
-  input: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    borderColor: '#ddd',
+    gap: 6,
+    backgroundColor: '#fff',
   },
-  submitButton: {
-    marginTop: 16,
-    paddingVertical: 8,
+  actionButtonActive: {
+    backgroundColor: '#f8f8f8',
+    borderWidth: 2,
   },
-  attendanceSummary: {
-    marginVertical: 20,
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
   },
-  summaryTitle: {
+  actionButtonTextActive: {
+    color: THEME,
+    fontWeight: '600',
+  },
+  pastSection: {
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  pastHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 12,
   },
-  summaryStats: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 16,
+  pastHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  summaryItem: {
-    alignItems: "center",
+  pastList: {
+    gap: 12,
   },
-  attendeesSection: {
+  pastEventLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 8,
+  },
+  pastEventText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     marginTop: 20,
   },
-  attendeesList: {
-    maxHeight: 400,
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
     marginTop: 16,
   },
-  attendeeItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  attendeeInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  respondedAt: {
-    color: "#999",
-    marginTop: 4,
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

@@ -261,20 +261,26 @@ setActiveTab('login');
 
 
       if (response.data.success) {
-        // Save token and user data
-        await AsyncStorage.setItem('authToken', response.data.data.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.data.user));
+  const { user, token } = response.data.data;
 
-        setSuccessMessage('Login successful!');
-        
-        // Navigate to dashboard/home
-        setTimeout(() => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Main' }],
-          });
-        }, 500);
-      }
+  // Save token and user data
+  await AsyncStorage.setItem('authToken', token);
+  await AsyncStorage.setItem('userData', JSON.stringify(user));
+
+  // 🔥 Register FCM token WITH userId
+  const { registerFCMToken } = require("../../utils/fcm");
+  registerFCMToken(user.id || user._id);
+
+  setSuccessMessage('Login successful!');
+
+  setTimeout(() => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    });
+  }, 500);
+}
+
     } catch (error) {
       console.error('Login error:', error);
       

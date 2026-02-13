@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   lodgeBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A237E',
+    backgroundColor: '#C21807',
     margin: 16,
     padding: 20,
     borderRadius: 16,
