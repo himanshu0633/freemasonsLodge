@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
 } from "react-native";
 import {
   Text,
@@ -28,223 +29,219 @@ import {
   Mic,
   Check,
 } from "lucide-react-native";
+import { useIsFocused, useNavigation, useRoute } from "@react-navigation/native";
+import { getMessages, sendMessage } from "../../chatapi";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Header from "../../Components/layout/Header";
-import { useNavigation, useRoute } from "@react-navigation/native";
-
-// Sample messages data
-const initialMessages = [
-  { id: 1, text: "Brethren, remember the rehearsal tomorrow at 7 PM.", time: "10:30 AM", sender: "W. Bro. John", isOwn: false },
-  { id: 2, text: "I'll be there. Do we need to bring anything?", time: "10:32 AM", sender: "You", isOwn: true },
-  { id: 3, text: "Just your regalia. The Tyler will provide the rest.", time: "10:35 AM", sender: "W. Bro. Robert", isOwn: false },
-  { id: 4, text: "Great! Looking forward to it.", time: "10:40 AM", sender: "You", isOwn: true },
-  { id: 5, text: "Don't forget the charity committee meeting after rehearsal.", time: "10:45 AM", sender: "Bro. Michael", isOwn: false },
-];
-
-// Sample group members
-const groupMembers = [
-  { id: 1, name: "W. Bro. John Smith", role: "Worshipful Master" },
-  { id: 2, name: "Bro. Robert Johnson", role: "Senior Warden" },
-  { id: 3, name: "Bro. Michael Brown", role: "Junior Warden" },
-  { id: 4, name: "Bro. David Wilson", role: "Treasurer" },
-  { id: 5, name: "Bro. James Taylor", role: "Secretary" },
-  { id: 6, name: "You", role: "Member" },
-];
 
 export default function ChatScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { chat } = route.params || {};
-  
-  const [messages, setMessages] = useState(initialMessages);
+
+  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [menuVisible, setMenuVisible] = useState(false);
-  const scrollViewRef = useRef();
+  const [userId, setUserId] = useState(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  const scrollViewRef = useRef();
+  const isFocused = useIsFocused();
+
+  /** Load logged-in user */
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem("userData");
+        if (stored) {
+          setUserId(JSON.parse(stored)._id);
+        }
+      } catch {
+        Alert.alert("Error", "Failed to load user");
+      }
+    })();
+  }, [isFocused]);
+
+  /** Load messages */
+  useEffect(() => {
+    if (!chat?._id || !userId) return;
+
+    (async () => {
+      try {
+        const res = await getMessages(chat._id);
+
+        const normalized = (res?.data || []).map(msg => ({
+          _id: msg._id,
+          text: msg.text,
+          isOwn: msg.sender?._id === userId,
+          senderName: msg.sender
+            ? `${msg.sender.firstName} ${msg.sender.lastName}`.trim()
+            : "Unknown",
+          time: new Date(msg.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        }));
+
+        setMessages(normalized);
+      } catch {
+        Alert.alert("Error", "Failed to load messages");
+      }
+    })();
+  }, [chat?._id, userId]);
+
+  /** Auto-scroll */
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const newMsg = {
-        id: messages.length + 1,
+  /** Send message */
+  const handleSendMessage = async () => {
+    if (!newMessage.trim()) return;
+
+    try {
+      const res = await sendMessage({
+        chatId: chat._id,
+        senderId: userId,
         text: newMessage,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sender: "You",
-        isOwn: true,
-      };
-      setMessages([...messages, newMsg]);
+      });
+
+      const msg = res.data;
+
+      setMessages(prev => [
+        ...prev,
+        {
+          _id: msg._id,
+          text: msg.text,
+          isOwn: true,
+          senderName: "You",
+          time: new Date(msg.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        },
+      ]);
+
       setNewMessage("");
+    } catch {
+      Alert.alert("Error", "Failed to send message");
     }
   };
 
   const openMembersList = () => {
-    navigation.navigate("GroupMembers", { members: groupMembers, chatName: chat?.name });
-  };
-
-  const openGroupInfo = () => {
     navigation.navigate("GroupInfo", { chat });
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       {/* <Header /> */}
-      
-      {/* Chat Header */}
       <View style={styles.chatHeader}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ArrowLeft color="#333" size={24} />
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <ArrowLeft size={24} />
         </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.chatInfo} onPress={openGroupInfo}>
-          <Avatar.Text
-            size={40}
-            label={chat?.isGroup ? "G" : chat?.name?.charAt(0)}
-            style={chat?.isGroup ? styles.groupAvatar : styles.userAvatar}
-          />
-          <View style={styles.chatTitleContainer}>
-            <Text style={styles.chatTitle}>{chat?.name || "Group Chat"}</Text>
+
+        <TouchableOpacity style={styles.chatInfo} onPress={openMembersList}>
+          <Avatar.Text size={40} label={chat?.name?.[0] || "G"} />
+          <View style={{ marginLeft: 12 }}>
+            <Text style={styles.chatTitle}>{chat?.name}</Text>
             <Text style={styles.memberStatus}>
-              {chat?.isGroup ? `${groupMembers.length} members` : "Online"}
+              {chat?.members?.length || 0} members
             </Text>
           </View>
         </TouchableOpacity>
 
-        <View style={styles.headerActions}>
-          <IconButton
-            icon={() => <Phone color="#333" size={22} />}
-            size={24}
-            onPress={() => console.log("Call")}
+        <Menu
+          visible={menuVisible}
+          onDismiss={() => setMenuVisible(false)}
+          anchor={
+            <IconButton
+              icon={() => <MoreVertical size={22} />}
+              onPress={() => setMenuVisible(true)}
+            />
+          }
+        >
+          <Menu.Item
+            onPress={openMembersList}
+            title="View Members"
+            leadingIcon={() => <Users size={18} />}
           />
-          <IconButton
-            icon={() => <Video color="#333" size={22} />}
-            size={24}
-            onPress={() => console.log("Video")}
-          />
-          <Menu
-            visible={menuVisible}
-            onDismiss={() => setMenuVisible(false)}
-            anchor={
-              <IconButton
-                icon={() => <MoreVertical color="#333" size={22} />}
-                size={24}
-                onPress={() => setMenuVisible(true)}
-              />
-            }
-          >
-            <Menu.Item 
-              onPress={() => {
-                setMenuVisible(false);
-                openMembersList();
-              }} 
-              title="View Members" 
-              leadingIcon={() => <Users size={18} />}
-            />
-            <Menu.Item 
-              onPress={() => {
-                setMenuVisible(false);
-                console.log("Mute notifications");
-              }} 
-              title="Mute Notifications" 
-            />
-            <Divider />
-            <Menu.Item 
-              onPress={() => {
-                setMenuVisible(false);
-                console.log("Report group");
-              }} 
-              title="Report" 
-              style={{ color: "#ff4444" }}
-            />
-          </Menu>
-        </View>
+          <Divider />
+          <Menu.Item title="Report" />
+        </Menu>
       </View>
 
-      {/* Messages Area */}
+      {/* Messages */}
       <KeyboardAvoidingView
-        style={styles.keyboardView}
+        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
-          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.dateSeparator}>
-            <Text style={styles.dateText}>TODAY</Text>
-          </View>
-
-          {messages.map((message) => (
+          {messages.map(message => (
             <View
-              key={message.id}
+              key={message._id}
               style={[
                 styles.messageBubble,
                 message.isOwn ? styles.ownMessage : styles.otherMessage,
               ]}
             >
               {!message.isOwn && (
-                <View style={styles.messageHeader}>
-                  <Text style={styles.senderName}>{message.sender}</Text>
-                </View>
+                <Text style={styles.senderName}>
+                  {message.senderName}
+                </Text>
               )}
-              <View style={[
-                styles.messageContent,
-                message.isOwn ? styles.ownMessageContent : styles.otherMessageContent
-              ]}>
-                <Text style={[
-                  styles.messageText,
-                  message.isOwn ? styles.ownMessageText : styles.otherMessageText
-                ]}>
+
+              <View
+                style={[
+                  styles.messageContent,
+                  message.isOwn
+                    ? styles.ownMessageContent
+                    : styles.otherMessageContent,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.messageText,
+                    message.isOwn && { color: "#fff" },
+                  ]}
+                >
                   {message.text}
                 </Text>
+
                 <View style={styles.messageFooter}>
                   <Text style={styles.messageTime}>{message.time}</Text>
-                  {message.isOwn && (
-                    <Check size={14} color="#4CAF50" style={styles.readIcon} />
-                  )}
+                  {message.isOwn && <Check size={14} color="#4CAF50" />}
                 </View>
               </View>
             </View>
           ))}
         </ScrollView>
 
-        {/* Message Input */}
+        {/* Input */}
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton}>
-            <Paperclip color="#666" size={22} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.mediaButton}>
-            <ImageIcon color="#666" size={22} />
-          </TouchableOpacity>
-          
           <TextInput
             style={styles.textInput}
             placeholder="Type a message..."
             value={newMessage}
             onChangeText={setNewMessage}
             multiline
-            mode="flat"
-            underlineColor="transparent"
-            activeUnderlineColor="transparent"
           />
-          
-          {newMessage.trim() ? (
-            <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
-              <Send color="#fff" size={22} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.micButton}>
-              <Mic color="#666" size={22} />
-            </TouchableOpacity>
-          )}
+
+          <TouchableOpacity
+            style={styles.sendButton}
+            onPress={handleSendMessage}
+          >
+            <Send color="#fff" size={20} />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+/* styles unchanged (same as yours) */
 
 const styles = StyleSheet.create({
   container: {
@@ -255,7 +252,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: "10%",
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",

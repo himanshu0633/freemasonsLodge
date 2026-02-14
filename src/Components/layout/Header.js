@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,23 +8,56 @@ import {
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, User, LogOut, CalendarPlus, Users, FileUp, UserCircle } from 'lucide-react-native';
+import {
+  Bell,
+  User,
+  LogOut,
+  CalendarPlus,
+  Users,
+  FileUp,
+  UserCircle,
+} from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Header() {
+  // ✅ ALL HOOKS AT TOP
   const navigation = useNavigation();
   const [menuVisible, setMenuVisible] = useState(false);
+  const [userRole, setUserRole] = useState(null);
 
-  const logout = () => {
+  // ✅ SAFE useEffect
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem('userData');
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser);
+        setUserRole(parsedUser.role);
+      } catch (e) {
+        console.log('Failed to load user role');
+      }
+    };
+
+    loadUser();
+  }, []);
+
+ const logout = async () => {
+  try {
     setMenuVisible(false);
+    await AsyncStorage.clear();   // removes all keys
     navigation.reset({
       index: 0,
       routes: [{ name: 'Login' }],
     });
-  };
+  } catch (e) {
+    console.log('Logout error:', e);
+  }
+};
 
   return (
-    <SafeAreaView style={{ backgroundColor: '#fff', zIndex: 10 }}>
+    <SafeAreaView style={{ backgroundColor: '#fff', zIndex: 10, height: "12%" }}>
       <View style={styles.header}>
         {/* LEFT */}
         <View style={styles.headerLeft}>
@@ -38,22 +71,22 @@ export default function Header() {
 
         {/* RIGHT */}
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}  onPress={() => {
-                  // setMenuVisible(false);
-                  navigation.navigate('NotificationPage');
-                }}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('NotificationPage')}
+          >
             <Bell size={24} color="#333" />
             <View style={styles.badge} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => setMenuVisible(!menuVisible)}
+            onPress={() => setMenuVisible(prev => !prev)}
           >
             <User size={24} color="#333" />
           </TouchableOpacity>
 
-          {/* PROFILE DROPDOWN */}
+          {/* DROPDOWN */}
           {menuVisible && (
             <View style={styles.dropdown}>
               <Pressable
@@ -67,40 +100,49 @@ export default function Header() {
                 <Text style={styles.menuText}>Profile</Text>
               </Pressable>
 
-              <Pressable
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate('AdminEvent');
-                }}
-              >
-                <CalendarPlus size={18} color="#333" />
-                <Text style={styles.menuText}>Create Event</Text>
-              </Pressable>
+              {/* ✅ ADMIN ONLY */}
+              {userRole === 'admin' && (
+                <>
+                  <Pressable
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setMenuVisible(false);
+                      navigation.navigate('AdminEvent');
+                    }}
+                  >
+                    <CalendarPlus size={18} color="#333" />
+                    <Text style={styles.menuText}>Create Event</Text>
+                  </Pressable>
 
-              <Pressable
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate('NotificationPage');
-                }}
-              >
-                <Users size={18} color="#333" />
-                <Text style={styles.menuText}>Create Meeting</Text>
-              </Pressable>
+                  <Pressable
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setMenuVisible(false);
+                      navigation.navigate('AdminAnouncement');
+                    }}
+                  >
+                    <Users size={18} color="#333" />
+                    <Text style={styles.menuText}>
+                      Create Announcement
+                    </Text>
+                  </Pressable>
 
-              <Pressable
-                style={styles.menuItem}
-                onPress={() => {
-                  setMenuVisible(false);
-                  navigation.navigate('UploadDocuments');
-                }}
-              >
-                <FileUp size={18} color="#333" />
-                <Text style={styles.menuText}>Upload Documents</Text>
-              </Pressable>
+                  <Pressable
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setMenuVisible(false);
+                      navigation.navigate('UploadDocuments');
+                    }}
+                  >
+                    <FileUp size={18} color="#333" />
+                    <Text style={styles.menuText}>
+                      Upload Documents
+                    </Text>
+                  </Pressable>
 
-              <View style={styles.divider} />
+                  <View style={styles.divider} />
+                </>
+              )}
 
               <Pressable style={styles.menuItem} onPress={logout}>
                 <LogOut size={18} color="#FF3B30" />
@@ -122,7 +164,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 6,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',

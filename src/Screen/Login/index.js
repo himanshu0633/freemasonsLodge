@@ -13,6 +13,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { ArrowLeft, Mail, Smartphone, Lock, User } from 'lucide-react-native';
 import axiosInstance from '../../axiosInstance'; 
@@ -390,6 +391,7 @@ setActiveTab('login');
 
   const renderLoginForm = () => (
     <>
+    
       <View style={styles.inputWrapper}>
         <Text style={styles.inputLabel}>Email Address</Text>
         <View style={styles.inputContainer}>
@@ -821,6 +823,7 @@ setActiveTab('login');
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor="#fff" barStyle="dark-content"   />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -833,7 +836,7 @@ setActiveTab('login');
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               style={styles.backButton} 
               onPress={() => {
                 if (activeTab === 'login') {
@@ -846,7 +849,7 @@ setActiveTab('login');
               <ArrowLeft size={isSmallScreen ? 20 : 24} color="#2C3E50" />
               <Text style={styles.backText}>Back</Text>
             </TouchableOpacity>
-            
+             */}
             <Text style={styles.headerTitle}>{getScreenTitle()}</Text>
           </View>
 
@@ -908,8 +911,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    paddingHorizontal: isSmallScreen ? 16 : 20,
-    paddingTop: Platform.OS === 'ios' ? 10 : 20,
+    paddingHorizontal: isSmallScreen ? "16%" : "30%",
+    paddingTop: Platform.OS === 'ios' ? "8%" : "8%",
     paddingBottom: isSmallScreen ? 16 : 20,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1012,7 +1015,7 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     fontSize: isSmallScreen ? 12 : 14,
-    color: '#3B82F6',
+    color: '#C21807',
     fontWeight: '500',
   },
   inputContainer: {
@@ -1115,12 +1118,12 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   submitButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#C21807',
     borderRadius: 12,
     paddingVertical: isSmallScreen ? 16 : 18,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#3B82F6',
+    shadowColor: '#e0574a',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -1130,7 +1133,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   disabledButton: {
-    backgroundColor: '#93C5FD',
+    backgroundColor: '#f68479',
     opacity: 0.7,
   },
   submitText: {
@@ -1150,7 +1153,7 @@ const styles = StyleSheet.create({
   },
   switchLink: {
     fontSize: isSmallScreen ? 13 : 14,
-    color: '#3B82F6',
+    color: '#C21807',
     fontWeight: '600',
     marginLeft: 4,
   },

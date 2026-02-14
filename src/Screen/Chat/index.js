@@ -1,84 +1,390 @@
-import React, { useState } from "react";
-import { View, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
-import { Text, Avatar, TextInput, Badge } from "react-native-paper";
-import { Plus, Search } from "lucide-react-native"; // ← Lucide icons
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import {
+  Text,
+  Avatar,
+  TextInput,
+  Modal,
+  Button,
+  Chip,
+  Searchbar,
+  Card,
+} from "react-native-paper";
+import { Plus, Users, MessageCircle } from "lucide-react-native";
+import { useIsFocused, useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import MultiSelect from "react-native-multiple-select";
 import Header from "../../Components/layout/Header";
-import { useNavigation } from "@react-navigation/native";
-
-const chats = [
-  { id: 1, name: "Lodge Harmony 341", lastMessage: "Brethren, remember the rehearsal tomorrow.", time: "10:30 AM", unread: 3, isGroup: true },
-  { id: 2, name: "W. Bro. James Smith", lastMessage: "Can you confirm the dining numbers?", time: "Yesterday", unread: 0, isGroup: false },
-  { id: 3, name: "Charity Committee", lastMessage: "The raffle prizes are sorted.", time: "Tuesday", unread: 0, isGroup: true },
-  { id: 4, name: "Bro. David Wilson", lastMessage: "Thanks for the lift!", time: "Monday", unread: 0, isGroup: false },
-];
+import * as chatapi from "../../chatapi";
 
 export default function Chat() {
+  const navigation = useNavigation();
+  const isFocused = useIsFocused();
+
   const [search, setSearch] = useState("");
-    const navigation = useNavigation();
+  const [groups, setGroups] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [groupName, setGroupName] = useState("");
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Load user data
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem("userData");
+        if (!stored) {
+          console.log("No user data found");
+          return;
+        }
+        const user = JSON.parse(stored);
+        setUserId(user._id);
+      } catch (error) {
+        console.error("Error loading user:", error);
+      }
+    })();
+  }, []);
+
+  // Load groups
+  const loadGroups = useCallback(async () => {
+    if (!userId) {
+      console.log("No userId available yet");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      console.log("Loading groups for userId:", userId);
+      // ✅ Fix: Use correct function name
+      const response = await chatapi.getAllGroups(userId);
+      console.log("Groups response:", response);
+      
+      // Handle different response structures
+      const groupsData = response?.data || response || [];
+      setGroups(Array.isArray(groupsData) ? groupsData : []);
+    } catch (error) {
+      console.error("Error loading groups:", error);
+      Alert.alert("Error", "Failed to load groups. Please try again.");
+      setGroups([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (isFocused && userId) {
+      loadGroups();
+    }
+  }, [isFocused, userId, loadGroups]);
+
+  // Load users for group creation
+  useEffect(() => {
+    if (!modalVisible || !userId) return;
+    
+    const loadUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        console.log("Loading all users...");
+        const response = await chatapi.getAllUsers();
+        console.log("Users response:", response);
+        
+        // Handle different response structures
+        const usersData = response?.data || response || [];
+        
+        // Ensure usersData is an array
+        if (!Array.isArray(usersData)) {
+          console.error("Users data is not an array:", usersData);
+          setUsers([]);
+          return;
+        }
+
+        // Filter out current user and format users
+        const formattedUsers = usersData
+          .filter(user => user && user._id !== userId)
+          .map(user => ({
+            ...user,
+            fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+            name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+          }));
+        
+        console.log("Formatted users:", formattedUsers);
+        setUsers(formattedUsers);
+      } catch (error) {
+        console.error("Error loading users:", error);
+        Alert.alert("Error", "Failed to load users. Please try again.");
+        setUsers([]);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    
+    loadUsers();
+  }, [modalVisible, userId]);
+
+  const handleCreateGroup = async () => {
+    if (!groupName || selectedUsers.length === 0) {
+      Alert.alert("Error", "Please enter a group name and select members");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log("Creating group with:", {
+        name: groupName,
+        members: [...selectedUsers, userId],
+        userId,
+      });
+
+      const response = await chatapi.createGroup({
+        name: groupName,
+        members: [...selectedUsers, userId],
+        userId,
+      });
+
+      console.log("Create group response:", response);
+
+      setGroupName("");
+      setSelectedUsers([]);
+      setModalVisible(false);
+      
+      // Reload groups after successful creation
+      await loadGroups();
+      
+      Alert.alert("Success", "Group created successfully!");
+    } catch (error) {
+      console.error("Error creating group:", error);
+      Alert.alert("Error", "Failed to create group. Please check your network and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredGroups = groups.filter(g =>
+    g?.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const getInitials = (name) => {
+    if (!name) return "G";
+    return name
+      .split(' ')
+      .map(word => word?.[0] || '')
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <Header />
+      
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text variant="titleLarge" style={styles.heading}>
-            Messages
-          </Text>
+          <View style={styles.titleContainer}>
+            <MessageCircle size={24} color="#2196F3" />
+            <Text variant="headlineMedium" style={styles.heading}>
+              Messages
+            </Text>
+          </View>
 
-          <TouchableOpacity style={styles.addBtn}>
-            <Plus color="#333" size={22} /> {/* ← Lucide Plus */}
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => setModalVisible(true)}
+          >
+            <Plus size={24} color="#2196F3" />
           </TouchableOpacity>
         </View>
 
-        <TextInput
+        <Searchbar
           placeholder="Search conversations..."
-          value={search}
           onChangeText={setSearch}
-          left={<TextInput.Icon icon={() => <Search color="#333" size={20} />} />}
-          mode="outlined"
-          dense
+          value={search}
+          style={styles.searchBar}
+          inputStyle={styles.searchInput}
         />
       </View>
 
-      {/* Chat List */}
-      <ScrollView>
-        {chats.map((chat) => (
-          <TouchableOpacity onPress={() => navigation.navigate('ChatScreen')} key={chat.id} style={styles.chatRow}>
-            <Avatar.Text
-              size={48}
-              label={chat.isGroup ? "G" : chat.name.charAt(0)}
-              style={chat.isGroup ? styles.groupAvatar : styles.userAvatar}
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2196F3" />
+          </View>
+        ) : (
+          <>
+            {filteredGroups.map(chat => (
+              <TouchableOpacity
+                key={chat?._id || Math.random().toString()}
+                style={styles.chatRow}
+                onPress={() => navigation.navigate("ChatScreen", { chat })}
+              >
+                <Avatar.Text
+                  size={52}
+                  label={getInitials(chat?.name)}
+                  style={styles.groupAvatar}
+                  labelStyle={styles.avatarLabel}
+                />
+                <View style={styles.chatContent}>
+                  <Text style={styles.chatName}>{chat?.name || "Unnamed Group"}</Text>
+                  <Text style={styles.message} numberOfLines={1}>
+                    {chat?.lastMessage || "No messages yet"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            {filteredGroups.length === 0 && !loading && (
+              <Card style={styles.emptyCard}>
+                <Card.Content style={styles.emptyContent}>
+                  <Users size={48} color="#ccc" />
+                  <Text style={styles.emptyTitle}>No conversations yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Tap the + button to start a new group chat
+                  </Text>
+                </Card.Content>
+              </Card>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      <Modal
+        visible={modalVisible}
+        onDismiss={() => setModalVisible(false)}
+        contentContainerStyle={styles.modalWrapper}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.keyboardView}
+        >
+          <View style={styles.modal}>
+            <Text variant="titleLarge" style={styles.modalTitle}>
+              Create New Group
+            </Text>
+
+            <TextInput
+              label="Group Name"
+              value={groupName}
+              onChangeText={setGroupName}
+              mode="outlined"
+              style={styles.input}
+              outlineColor="#ddd"
+              activeOutlineColor="#2196F3"
             />
 
-            <View style={styles.chatContent}>
-              <View style={styles.chatHeader}>
-                <Text numberOfLines={1} style={styles.chatName}>
-                  {chat.name}
-                </Text>
-                <Text style={styles.time}>{chat.time}</Text>
+            <Text style={styles.sectionLabel}>Select Members</Text>
+            
+            {loadingUsers ? (
+              <View style={styles.loadingUsers}>
+                <ActivityIndicator size="small" color="#2196F3" />
               </View>
+            ) : (
+              <>
+                {users.length > 0 ? (
+                  <MultiSelect
+                    items={users}
+                    uniqueKey="_id"
+                    displayKey="fullName"
+                    selectedItems={selectedUsers}
+                    onSelectedItemsChange={setSelectedUsers}
+                    selectText="Pick members..."
+                    searchInputPlaceholderText="Search users..."
+                    tagRemoveIconColor="#ccc"
+                    tagBorderColor="#ccc"
+                    tagTextColor="#000"
+                    selectedItemTextColor="#2196F3"
+                    selectedItemIconColor="#2196F3"
+                    itemTextColor="#000"
+                    searchInputStyle={styles.searchInput}
+                    submitButtonColor="#2196F3"
+                    submitButtonText="Done"
+                    styleMainWrapper={styles.multiSelectMain}
+                    styleDropdownMenuSubsection={styles.multiSelectDropdown}
+                    styleSelectorContainer={styles.selectorContainer}
+                    styleTextDropdown={styles.dropdownText}
+                    styleIndicator={styles.indicator}
+                  />
+                ) : (
+                  <Text style={styles.noUsersText}>No users available</Text>
+                )}
 
-              <Text numberOfLines={1} style={styles.message}>
-                {chat.lastMessage}
-              </Text>
-            </View>
-
-            {chat.unread > 0 && (
-              <Badge style={styles.badge}>{chat.unread}</Badge>
+                {selectedUsers.length > 0 && (
+                  <View style={styles.selectedContainer}>
+                    <Text style={styles.selectedLabel}>
+                      Selected ({selectedUsers.length}):
+                    </Text>
+                    <View style={styles.chipContainer}>
+                      {selectedUsers.map(id => {
+                        const user = users.find(u => u?._id === id);
+                        return user ? (
+                          <Chip
+                            key={id}
+                            onClose={() => setSelectedUsers(prev => 
+                              prev.filter(uid => uid !== id)
+                            )}
+                            style={styles.chip}
+                            textStyle={styles.chipText}
+                          >
+                            {user.fullName}
+                          </Chip>
+                        ) : null;
+                      })}
+                    </View>
+                  </View>
+                )}
+              </>
             )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Button
+                mode="outlined"
+                onPress={() => setModalVisible(false)}
+                style={styles.cancelBtn}
+                labelStyle={styles.cancelBtnLabel}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleCreateGroup}
+                style={styles.createBtn}
+                labelStyle={styles.createBtnLabel}
+                disabled={!groupName || selectedUsers.length === 0 || loading}
+                loading={loading}
+              >
+                Create Group
+              </Button>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   header: {
     padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   headerRow: {
     flexDirection: "row",
@@ -86,51 +392,191 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   heading: {
     fontWeight: "700",
+    color: '#333',
   },
   addBtn: {
-    padding: 6,
-    borderRadius: 20,
+    padding: 10,
+    borderRadius: 30,
     backgroundColor: "#e3f2fd",
+  },
+  searchBar: {
+    elevation: 0,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+  },
+  searchInput: {
+    fontSize: 14,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
   },
   chatRow: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderColor: "#ddd",
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
   },
   groupAvatar: {
     backgroundColor: "#e3f2fd",
   },
-  userAvatar: {
-    backgroundColor: "#eeeeee",
+  avatarLabel: {
+    fontSize: 18,
+    color: '#2196F3',
   },
   chatContent: {
     flex: 1,
-    marginLeft: 12,
-  },
-  chatHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    marginLeft: 16,
+    justifyContent: 'center',
   },
   chatName: {
     fontWeight: "600",
-    flex: 1,
-  },
-  time: {
-    fontSize: 10,
-    opacity: 0.6,
-    marginLeft: 8,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 4,
   },
   message: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: 2,
+    fontSize: 13,
+    color: '#666',
   },
-  badge: {
-    marginLeft: 8,
+  emptyCard: {
+    margin: 16,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  emptyContent: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  modalWrapper: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  keyboardView: {
+    width: '100%',
+  },
+  modal: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    textAlign: "center",
+    marginBottom: 20,
+    fontWeight: "700",
+    color: '#333',
+  },
+  input: {
+    marginBottom: 20,
+    backgroundColor: '#fff',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  loadingUsers: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  multiSelectMain: {
+    marginBottom: 16,
+  },
+  multiSelectDropdown: {
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  selectorContainer: {
+    marginTop: 4,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    maxHeight: 200,
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  indicator: {
+    marginRight: 8,
+  },
+  selectedContainer: {
+    marginTop: 16,
+  },
+  selectedLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 8,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    backgroundColor: '#e3f2fd',
+    borderRadius: 20,
+  },
+  chipText: {
+    fontSize: 12,
+    color: '#2196F3',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    borderColor: '#ddd',
+  },
+  cancelBtnLabel: {
+    color: '#666',
+  },
+  createBtn: {
+    flex: 1,
+    backgroundColor: '#2196F3',
+  },
+  createBtnLabel: {
+    color: '#fff',
+  },
+  noUsersText: {
+    textAlign: 'center',
+    color: '#999',
+    padding: 20,
   },
 });

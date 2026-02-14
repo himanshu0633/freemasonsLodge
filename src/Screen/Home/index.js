@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, Alert } from "react-native";
 import { Card, Button, Badge } from "react-native-paper";
 import {
   ShieldCrown,
@@ -17,11 +17,125 @@ import {
   Hammer,
   SilverwareForkKnife,
   School,
-  Heart
+  Heart,
+  MapPin
 } from "lucide-react-native";
 import Header from "../../Components/layout/Header";
+import axiosInstance from "../../axiosInstance";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useIsFocused, useNavigation } from "@react-navigation/native";
+import { format, isFuture } from "date-fns";
 
 export default function Home() {
+ const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [userId, setUserId] = useState(null);
+   const [announcements, setAnnouncements] = useState([]);
+     const isFocused = useIsFocused();
+     const [visibleCount, setVisibleCount] = useState(4);
+  const navigation = useNavigation();
+  
+
+
+     useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("userData");
+        if (!storedUser) return;
+        const parsedUser = JSON.parse(storedUser);
+        setUserId(parsedUser._id);
+      } catch {
+        Alert.alert("Error", "Failed to load user data");
+      }
+    };
+
+    if (isFocused) loadUser();
+  }, [isFocused]);
+
+
+     useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setLoading(true);
+        const res = await axiosInstance.get("/events/admin/all");
+        setEvents(res.data?.events || []);
+      } catch {
+        Alert.alert("Error", "Failed to load events");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (isFocused && userId) {
+      fetchEvents();
+    }
+  }, [isFocused, userId]);
+
+
+    useEffect(() => {
+    
+  const fetchAnnouncements = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/announcements/all");
+      setAnnouncements(Array.isArray(res.data) ? res.data : []);
+      console.log("kjfnd", res.data);
+    } catch {
+      Alert.alert("Error", "Failed to load announcements");
+    } finally {
+      setLoading(false);
+    }
+  };
+   if (isFocused ) {
+      fetchAnnouncements();
+    }
+}, [isFocused])
+
+
+
+
+    const formatDate = (dateString) => {
+    const d = new Date(dateString);
+    return d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  /* 🔹 Filter upcoming */
+  const upcomingEvents = events.filter(
+    (e) => new Date(e.date) >= new Date()
+  );
+
+  const nextEvent =
+    events
+      .filter(e => isFuture(new Date(e.date)))
+      .sort((a, b) => new Date(a.date) - new Date(b.date))[0] || null;
+
+  /* ---------------- Attendance Action ---------------- */
+  const markAttendance = async (eventId, status) => {
+    try {
+      await axiosInstance.post(`/events/${eventId}/attendance`, {
+        status,
+        userId,
+      });
+      const res = await axiosInstance.get("/events/admin/all");
+      setEvents(res.data?.events || []);
+    } catch {
+      Alert.alert("Error", "Could not update attendance");
+    }
+  };
+
+  /* 🔹 Load more */
+  const loadMore = () => {
+    setVisibleCount((prev) => prev + 4);
+  };
+
+   const goToAttendance = (event) => {
+    navigation.navigate("attendance", { eventId: event._id });
+  };
   return (
     <SafeAreaView style={styles.container}>
       <Header />
@@ -36,7 +150,6 @@ export default function Home() {
                          source={require('../../assets/applogo.jpeg')}
                          style={styles.logo}
                        />
-
           </View>
           <View style={styles.lodgeInfo}>
             <Text style={styles.lodgeName}>Lodge Mother India</Text>
@@ -51,121 +164,163 @@ export default function Home() {
         {/* Quick Actions */}
         <View style={styles.quickActions}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hScroll}>
-            
-            {/* Meeting Card */}
+           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {/* ================= NEXT MEETING ================= */}
             <Card style={[styles.card, styles.meetingCard]}>
               <Card.Content>
                 <View style={styles.cardHeader}>
-                 <CalendarIcon size={20} color="#8B0000" />
+                  <CalendarIcon size={20} color="#8B0000" />
                   <Text style={styles.cardLabel}>NEXT MEETING</Text>
                 </View>
-                <Text style={styles.cardTitle}>Jan 15, 2026</Text>
-                <Text style={styles.cardText}>Third Degree Working</Text>
-                <View style={styles.cardFooter}>
-                    <Clock size={14} color="#666" />
-                  <Text style={styles.cardTime}>6:30 PM • Dining Room</Text>
-                </View>
-                <Button 
-                  mode="contained" 
-                  style={styles.cardButton}
-                  labelStyle={styles.buttonLabel}
-                >
-                  View Details
-                </Button>
+
+                {nextEvent ? (
+                  <>
+                    <Text style={styles.cardTitle}>{nextEvent.title}</Text>
+                    <Text style={styles.cardText}>
+                      {nextEvent.description || "No description provided"}
+                    </Text>
+
+                    <View style={styles.metaRow}>
+                      {/* <Clock size={14} color="#666" /> */}
+                      <Text style={styles.metaText}>
+                        {format(new Date(nextEvent.date), "dd MMM yyyy • h:mm a")}
+                      </Text>
+                    </View>
+
+                    {/* <View style={styles.metaRow}>
+                      <MapPin size={14} color="#666" />
+                      <Text style={styles.metaText}>
+                        {nextEvent.location || "Lodge Hall"}
+                      </Text>
+                    </View> */}
+
+                    <Button
+                      mode="contained"
+                      style={styles.cardButton}
+                      onPress={() =>
+                        navigation.navigate("attendance", {
+                          eventId: nextEvent._id,
+                        })
+                      }
+                    >
+                      View Details
+                    </Button>
+                  </>
+                ) : (
+                  <Text style={styles.cardText}>No upcoming meetings</Text>
+                )}
               </Card.Content>
             </Card>
 
-            {/* Attendance Card */}
+            {/* ================= ATTENDANCE ================= */}
             <Card style={[styles.card, styles.attendanceCard]}>
               <Card.Content>
                 <View style={styles.cardHeader}>
-                 <Users size={20} color="#C9A227" />
+                  <Users size={20} color="#C9A227" />
                   <Text style={styles.cardLabel}>ATTENDANCE</Text>
                 </View>
-                <Text style={styles.cardText}>Are you attending the next meeting?</Text>
-                <View style={styles.attendanceButtons}>
-                  <Button 
-                    mode="contained" 
-                    style={[styles.attendanceBtn, styles.yesBtn]}
-                    labelStyle={styles.buttonLabel}
-                  >
-                    <Check size={16} color="#FFF" /> Yes
-                  </Button>
-                  <Button 
-                    mode="outlined" 
-                    style={[styles.attendanceBtn, styles.apologyBtn]}
-                    labelStyle={styles.buttonLabel}
-                  >
-                     <X size={16} color="#666" /> Send Apology
-                  </Button>
-                </View>
-                <Text style={styles.attendanceNote}>12 Brothers confirmed</Text>
+
+                {nextEvent ? (
+                  <>
+                    <Text style={styles.cardText}>
+                      Are You Attending the next meeting?
+                    </Text>
+
+                    {/* Stats */}
+                    <View style={styles.statsRow}>
+                      <Text>{nextEvent.stats?.attending ?? 0} brothers attending</Text>
+                      {/* <Text>Maybe: {nextEvent.stats?.maybe ?? 0}</Text>
+                      <Text>No: {nextEvent.stats?.notAttending ?? 0}</Text> */}
+                    </View>
+
+                    {/* Actions */}
+                    <View style={styles.attendanceButtons}>
+                      <Button
+                        mode="contained"
+                        style={styles.yesBtn}
+                        onPress={() =>
+                          markAttendance(nextEvent._id, "attending")
+                        }
+                      >
+                        <Check size={16} color="#FFF" /> Yes
+                      </Button>
+
+                      <Button
+                        mode="outlined"
+                        onPress={() =>
+                          markAttendance(nextEvent._id, "not_attending")
+                        }
+                      >
+                        <X size={16} /> No
+                      </Button>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.cardText}>
+                    No upcoming event to respond
+                  </Text>
+                )}
               </Card.Content>
             </Card>
 
-            {/* Dues Card */}
+            {/* ================= DUES ================= */}
             <Card style={[styles.card, styles.duesCard]}>
               <Card.Content>
                 <View style={styles.cardHeader}>
-                    <CreditCard size={20} color="#1E3A8A" />
+                  <CreditCard size={20} color="#1E3A8A" />
                   <Text style={styles.cardLabel}>MEMBERSHIP DUES</Text>
                 </View>
-                <View style={styles.duesAmountContainer}>
-                  <Text style={styles.dueAmount}>$150.00</Text>
-                  <Badge style={styles.dueBadge}>Due</Badge>
-                </View>
-                <Text style={styles.dueDate}>Due by Jan 30, 2026</Text>
-                 <Button mode="contained" style={styles.payButton} labelStyle={styles.buttonLabel} icon={() => <DollarSign size={16} color="#FFF" />}>
+                <Text style={styles.cardTitle}>$150.00</Text>
+                <Badge style={styles.dueBadge}>Due</Badge>
+                <Button mode="contained" style={styles.payButton}>
                   Pay Now
                 </Button>
               </Card.Content>
             </Card>
-
           </ScrollView>
         </View>
-
+     
+       
         {/* Announcements Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Announcements</Text>
-            <TouchableOpacity style={styles.viewAllBtn}>
-              <Text style={styles.viewAllText}>View All</Text>
-              <ChevronRight size={16} color="#8B0000" />
-            </TouchableOpacity>
-          </View>
+     {/* Announcements Section */}
+<View style={styles.section}>
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionTitle}>Announcements</Text>
+    <TouchableOpacity
+      style={styles.viewAllBtn}
+      onPress={() => navigation.navigate("announcements")}
+    >
+      <Text style={styles.viewAllText}>View All</Text>
+      <ChevronRight size={16} color="#8B0000" />
+    </TouchableOpacity>
+  </View>
 
-          <Announcement
-            icon={<File size={20} color="#8B0000" />}
-            title="January Summons Released"
-            time="2h ago"
-            desc="The summons for the upcoming regular meeting has been published. All members are requested to review."
-            category="Official"
-          />
+  {announcements.slice(0, 4).map((item) => (
+    <Announcement
+      key={item._id}
+      title={item.title}
+      desc={item.description}
+      category={item.type}
+      time={format(new Date(item.createdAt), "dd MMM • h:mm a")}
+      onPress={() =>
+        navigation.navigate("announcements", { id: item._id })
+      }
+    />
+  ))}
 
-          <Announcement
-            icon={<Bullhorn size={20} color="#C9A227" />}
-            title="Provincial Grand Lodge Visit"
-            time="1d ago"
-            desc="Provincial Grand Master will be visiting next month. Prepare for special ceremonies."
-            category="Important"
-          />
+  {announcements.length === 0 && (
+    <Text style={{ color: "#666", textAlign: "center" }}>
+      No announcements available
+    </Text>
+  )}
+</View>
 
-          <Announcement
-           icon={<Heart size={20} color="#1E3A8A" />}
-            title="Charity Dinner Event"
-            time="3d ago"
-            desc="Annual charity dinner scheduled for February 20th. Please RSVP by Feb 10th."
-            category="Event"
-          />
-
-        </View>
 
         {/* Gallery Preview */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Lodge Life</Text>
-            <TouchableOpacity style={styles.viewAllBtn}>
+            <TouchableOpacity style={styles.viewAllBtn}  onPress={() => navigation.navigate("Gallery")}>
               <Text style={styles.viewAllText}>View Gallery</Text>
                <ChevronRight size={18} color="#999" />
             </TouchableOpacity>
@@ -188,35 +343,29 @@ export default function Home() {
         </View>
 
         {/* Upcoming Events */}
-        <View style={styles.section}>
+       {/* Upcoming Events */}
+ <View style={styles.section}>
           <Text style={styles.sectionTitle}>Upcoming Events</Text>
+
           <View style={styles.eventsGrid}>
-            <EventCard
-              icon="users"
-              title="Stated Meeting"
-              date="Jan 15"
-              color="#8B0000"
-            />
-            <EventCard
-              icon="gift"
-              title="Festive Board"
-              date="Jan 22"
-              color="#C9A227"
-            />
-            <EventCard
-              icon="book"
-              title="Education Night"
-              date="Feb 5"
-              color="#1E3A8A"
-            />
-            <EventCard
-              icon="heart"
-              title="Charity Event"
-              date="Feb 20"
-              color="#2E7D32"
-            />
+            {upcomingEvents.slice(0, visibleCount).map((event) => (
+              <EventCard
+                key={event._id}
+                title={event.title}
+                date={formatDate(event.date)}
+                onPress={() => goToAttendance(event)}
+              />
+            ))}
           </View>
+
+          {visibleCount < upcomingEvents.length && (
+            <Button mode="outlined" style={{ marginTop: 16 }} onPress={loadMore}>
+              View More
+            </Button>
+          )}
         </View>
+
+
 
       </ScrollView>
     </SafeAreaView>
@@ -224,26 +373,33 @@ export default function Home() {
 }
 
 /* 🔹 Announcement Item Component */
-function Announcement({  title, time, desc, category }) {
+function Announcement({ title, time, desc, category, onPress }) {
   const categoryColors = {
-    Official: "#8B0000",
-    Important: "#C9A227",
-    Event: "#1E3A8A",
+    General: "#1E3A8A",
+    Notice: "#C9A227",
+    Urgent: "#8B0000",
   };
 
+  const color = categoryColors[category] || "#666";
+
   return (
-    <TouchableOpacity style={styles.announcement}>
-      <View style={[styles.annIcon, { backgroundColor: categoryColors[category] + '15' }]}>
-        <File size={20} color={categoryColors[category]} />
+    <TouchableOpacity style={styles.announcement} onPress={onPress}>
+      <View style={[styles.annIcon, { backgroundColor: color + "15" }]}>
+        <File size={20} color={color} />
       </View>
+
       <View style={styles.annContent}>
         <View style={styles.annHeader}>
           <Text style={styles.annTitle}>{title}</Text>
-          <Badge style={[styles.categoryBadge, { backgroundColor: categoryColors[category] }]}>
+          <Badge style={[styles.categoryBadge, { backgroundColor: color }]}>
             {category}
           </Badge>
         </View>
-        <Text style={styles.annDesc}>{desc}</Text>
+
+        <Text style={styles.annDesc} numberOfLines={2}>
+          {desc}
+        </Text>
+
         <View style={styles.annFooter}>
           <View style={styles.timeBadge}>
             <Clock size={12} color="#666" />
@@ -251,26 +407,30 @@ function Announcement({  title, time, desc, category }) {
           </View>
         </View>
       </View>
+
       <ChevronRight size={18} color="#999" />
     </TouchableOpacity>
   );
 }
 
+
 /* 🔹 Event Card Component */
-function EventCard({ title, date, color }) {
+function EventCard({ title , date}) {
   return (
     <TouchableOpacity style={styles.eventCard}>
-      <View style={[styles.eventIcon, { backgroundColor: color + '15' }]}>
-        <CalendarIcon size={24} color={color} />
+      <View style={[styles.eventIcon, { backgroundColor: "#8B000015" }]}>
+        <CalendarIcon size={24} color="#8B0000" />
       </View>
+
       <Text style={styles.eventTitle}>{title}</Text>
-      <View style={styles.eventDate}>
-        <CalendarIcon size={12} color={color} />
-        <Text style={[styles.eventDateText, { color }]}>{date}</Text>
+       <View style={styles.eventDate}>
+        <CalendarIcon size={12} color="#8B0000" />
+        <Text style={[styles.eventDateText]}>{date}</Text>
       </View>
     </TouchableOpacity>
   );
 }
+
 
 /* 🎨 Enhanced Styles */
 const styles = StyleSheet.create({

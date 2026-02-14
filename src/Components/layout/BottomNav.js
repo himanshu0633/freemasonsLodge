@@ -17,7 +17,7 @@ export default function BottomNav() {
     { key: "docs", title: "Docs", icon: FileText },
     { key: "chat", title: "Chat", icon: MessageSquare },
     { key: "calendar", title: "Calendar", icon: Calendar },
-    { key: "attendance", title: "Attend", icon: ClipboardCheck },
+    { key: "attendance", title: "Events", icon: ClipboardCheck },
     { key: "payments", title: "Pay", icon: CreditCard },
   ]);
 
@@ -40,7 +40,7 @@ export default function BottomNav() {
         const IconComponent = route.icon;
         return <IconComponent color={color} size={22} />;
       }}
-      activeColor="#2563eb"
+      activeColor="#8B0000"
       inactiveColor="#6b7280"
     />
   );

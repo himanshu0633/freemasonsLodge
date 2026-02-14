@@ -7,16 +7,14 @@ import {
   RefreshControl,
   TouchableOpacity,
   Dimensions,
+  FlatList,
 } from "react-native";
 import {
   Card,
   Text,
   Button,
-  Chip,
   ActivityIndicator,
   Avatar,
-  Divider,
-  IconButton,
 } from "react-native-paper";
 import {
   CheckCircle,
@@ -25,15 +23,18 @@ import {
   Calendar,
   MapPin,
   Users,
-  ChevronRight,
   TrendingUp,
+  Zap,
+  BarChart3,
 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Header from "../../Components/layout/Header";
 import axiosInstance from "../../axiosInstance";
 import { format, isPast, isToday, isFuture } from "date-fns";
 
-const THEME = "#C21807";
+const SCARLET_RED = "#C21807";
+const DARK_RED = "#8B1205";
+const LIGHT_RED = "#FFE5E0";
 const { width } = Dimensions.get("window");
 
 export default function Attendance() {
@@ -41,7 +42,6 @@ export default function Attendance() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState(null);
-  const [expandedPast, setExpandedPast] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -110,22 +110,22 @@ export default function Attendance() {
   const getStatusColor = (status) => {
     switch (status) {
       case "attending":
-        return "#2e7d32";
+        return "#10B981";
       case "not_attending":
-        return "#c62828";
+        return "#EF4444";
       case "maybe":
-        return "#f9a825";
+        return "#F59E0B";
       default:
-        return "#aaa";
+        return "#9CA3AF";
     }
   };
 
   const renderStatusIcon = (status) => {
     const color = getStatusColor(status);
-    if (status === "attending") return <CheckCircle size={16} color={color} />;
-    if (status === "not_attending") return <XCircle size={16} color={color} />;
-    if (status === "maybe") return <Clock size={16} color={color} />;
-    return <Clock size={16} color="#aaa" />;
+    if (status === "attending") return <CheckCircle size={14} color={color} />;
+    if (status === "not_attending") return <XCircle size={14} color={color} />;
+    if (status === "maybe") return <Clock size={14} color={color} />;
+    return <Clock size={14} color="#9CA3AF" />;
   };
 
   const getStatusText = (status) => {
@@ -135,255 +135,240 @@ export default function Attendance() {
     return "Not Responded";
   };
 
+  const calculateAttendancePercentage = (stats) => {
+    const total = (stats?.attending ?? 0) + (stats?.maybe ?? 0) + (stats?.notAttending ?? 0);
+    if (total === 0) return 0;
+    return Math.round(((stats?.attending ?? 0) / total) * 100);
+  };
+
   // Separate events
   const upcomingEvents = events.filter(event => !isEventPast(event.date));
   const pastEvents = events.filter(event => isEventPast(event.date));
-  
-  // Get next upcoming event
-  const nextEvent = upcomingEvents.length > 0 
-    ? upcomingEvents.sort((a, b) => new Date(a.date) - new Date(b.date))[0] 
-    : null;
 
-  const renderEventCard = (event, isNextEvent = false) => {
+  const renderCompactEventCard = (event) => {
     const eventDate = new Date(event.date);
     const isPastEvent = isEventPast(event.date);
-    const isTodayEvent = isToday(eventDate);
-    
+    const attendancePercent = calculateAttendancePercentage(event.stats);
+    const totalAttendees = (event.stats?.attending ?? 0) + (event.stats?.maybe ?? 0) + (event.stats?.notAttending ?? 0);
+
     return (
-      <Card 
-        key={event._id} 
-        style={[
-          styles.eventCard,
-          isNextEvent && styles.nextEventCard,
-          isTodayEvent && styles.todayEventCard,
-          isPastEvent && styles.pastEventCard,
-        ]}
+      <TouchableOpacity
+        key={event._id}
+        activeOpacity={0.7}
       >
-        <Card.Content>
-          {/* Event Header with Status Badge */}
-          <View style={styles.eventHeader}>
-            <View style={styles.eventHeaderLeft}>
-              <View style={styles.dateBadge}>
-                <Text style={styles.dateDay}>{format(eventDate, "dd")}</Text>
-                <Text style={styles.dateMonth}>{format(eventDate, "MMM")}</Text>
-              </View>
-              <View style={styles.eventTitleContainer}>
-                <Text variant="titleMedium" style={styles.eventTitle}>
-                  {event.title}
+        <View
+          style={[
+            styles.compactCard,
+            isPastEvent && styles.pastCompactCard,
+          ]}
+        >
+          {/* Date & Title Row */}
+          <View style={styles.cardTopRow}>
+            <View style={styles.datePill}>
+              <Text style={styles.datePillText}>
+                {format(eventDate, "MMM dd")}
+              </Text>
+            </View>
+            <View style={styles.titleSection}>
+              <Text style={styles.compactTitle} numberOfLines={1}>
+                {event.title}
+              </Text>
+              <Text style={styles.compactdesc}>
+                {event.description}
+              </Text>
+              <View style={styles.timeLocationRow}>
+                <Clock size={12} color="#6B7280" />
+                <Text style={styles.timeText}>{format(eventDate, "h:mm a")}</Text>
+                <MapPin size={12} color="#6B7280" />
+                <Text style={styles.locationText} numberOfLines={1}>
+                  {event.location}
                 </Text>
-                <View style={styles.eventMeta}>
-                  <View style={styles.metaItem}>
-                    <Clock size={14} color="#666" />
-                    <Text variant="bodySmall" style={styles.metaText}>
-                      {format(eventDate, "h:mm a")}
-                    </Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <MapPin size={14} color="#666" />
-                    <Text variant="bodySmall" style={styles.metaText} numberOfLines={1}>
-                      {event.location}
-                    </Text>
-                  </View>
-                </View>
               </View>
             </View>
+          </View>
+
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statIndicator}>
+              <View style={[styles.statDot, { backgroundColor: "#10B981" }]} />
+              <Text style={styles.statSmallValue}>{event.stats?.attending ?? 0}</Text>
+            </View>
+            <View style={styles.statIndicator}>
+              <View style={[styles.statDot, { backgroundColor: "#F59E0B" }]} />
+              <Text style={styles.statSmallValue}>{event.stats?.maybe ?? 0}</Text>
+            </View>
+            <View style={styles.statIndicator}>
+              <View style={[styles.statDot, { backgroundColor: "#EF4444" }]} />
+              <Text style={styles.statSmallValue}>{event.stats?.notAttending ?? 0}</Text>
+            </View>
+            <View style={styles.totalIndicator}>
+              <Users size={12} color="#6B7280" />
+              <Text style={styles.totalValue}>{totalAttendees}</Text>
+            </View>
+
+            {/* Status Display */}
             {!isPastEvent && event.myStatus && (
-              <View style={[styles.statusChip, { backgroundColor: getStatusColor(event.myStatus) + '20' }]}>
+              <View style={[styles.myStatusBadge, { backgroundColor: getStatusColor(event.myStatus) + '20' }]}>
                 {renderStatusIcon(event.myStatus)}
-                <Text style={[styles.statusText, { color: getStatusColor(event.myStatus) }]}>
+                <Text style={[styles.myStatusText, { color: getStatusColor(event.myStatus) }]}>
                   {getStatusText(event.myStatus)}
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Stats Section - Compact */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: "#2e7d32" }]} />
-              <Text style={styles.statLabel}>Yes</Text>
-              <Text style={styles.statValue}>{event.stats?.attending ?? 0}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: "#f9a825" }]} />
-              <Text style={styles.statLabel}>Maybe</Text>
-              <Text style={styles.statValue}>{event.stats?.maybe ?? 0}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <View style={[styles.statDot, { backgroundColor: "#c62828" }]} />
-              <Text style={styles.statLabel}>No</Text>
-              <Text style={styles.statValue}>{event.stats?.notAttending ?? 0}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Users size={14} color="#666" />
-              <Text style={styles.statLabel}>Total</Text>
-              <Text style={styles.statValue}>
-                {(event.stats?.attending ?? 0) + (event.stats?.maybe ?? 0) + (event.stats?.notAttending ?? 0)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Action Buttons - Only for upcoming events and not past */}
+          {/* Action Buttons - Compact */}
           {!isPastEvent && (
-            <View style={styles.actionButtons}>
+            <View style={styles.compactActionButtons}>
               <TouchableOpacity
                 style={[
-                  styles.actionButton,
-                  event.myStatus === "attending" && styles.actionButtonActive,
-                  { borderColor: THEME }
+                  styles.compactActionBtn,
+                  event.myStatus === "attending" && { backgroundColor: "#10B981" }
                 ]}
                 onPress={() => markAttendance(event._id, "attending")}
               >
-                <CheckCircle 
-                  size={18} 
-                  color={event.myStatus === "attending" ? THEME : "#666"} 
+                <CheckCircle
+                  size={16}
+                  color={event.myStatus === "attending" ? "#fff" : "#10B981"}
                 />
-                <Text style={[
-                  styles.actionButtonText,
-                  event.myStatus === "attending" && styles.actionButtonTextActive
-                ]}>
-                  Yes
-                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.actionButton,
-                  event.myStatus === "maybe" && styles.actionButtonActive,
-                  { borderColor: "#f9a825" }
+                  styles.compactActionBtn,
+                  event.myStatus === "maybe" && { backgroundColor: "#F59E0B" }
                 ]}
                 onPress={() => markAttendance(event._id, "maybe")}
               >
-                <Clock 
-                  size={18} 
-                  color={event.myStatus === "maybe" ? "#f9a825" : "#666"} 
+                <Clock
+                  size={16}
+                  color={event.myStatus === "maybe" ? "#fff" : "#F59E0B"}
                 />
-                <Text style={[
-                  styles.actionButtonText,
-                  event.myStatus === "maybe" && { color: "#f9a825" }
-                ]}>
-                  Maybe
-                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.actionButton,
-                  event.myStatus === "not_attending" && styles.actionButtonActive,
-                  { borderColor: "#c62828" }
+                  styles.compactActionBtn,
+                  event.myStatus === "not_attending" && { backgroundColor: "#EF4444" }
                 ]}
                 onPress={() => markAttendance(event._id, "not_attending")}
               >
-                <XCircle 
-                  size={18} 
-                  color={event.myStatus === "not_attending" ? "#c62828" : "#666"} 
+                <XCircle
+                  size={16}
+                  color={event.myStatus === "not_attending" ? "#fff" : "#EF4444"}
                 />
-                <Text style={[
-                  styles.actionButtonText,
-                  event.myStatus === "not_attending" && { color: "#c62828" }
-                ]}>
-                  No
-                </Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Past Event Label */}
           {isPastEvent && (
-            <View style={styles.pastEventLabel}>
-              <Clock size={14} color="#999" />
-              <Text style={styles.pastEventText}>Past Event</Text>
+            <View style={styles.pastLabel}>
+              <Text style={styles.pastLabelText}>Past Event</Text>
             </View>
           )}
-        </Card.Content>
-      </Card>
+        </View>
+      </TouchableOpacity>
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Header />
-        <ActivityIndicator size="large" color={THEME} />
-      </View>
-    );
-  }
+  const statsOverview = {
+    totalEvents: events.length,
+    upcomingCount: upcomingEvents.length,
+    pastCount: pastEvents.length,
+    totalAttending: events.reduce((acc, e) => acc + (e.stats?.attending ?? 0), 0),
+  };
+
+  // if (loading) {
+  //   return (
+  //     <View style={styles.loadingContainer}>
+  //       {/* <Header /> */}
+  //       <ActivityIndicator size="large" color={SCARLET_RED} />
+  //     </View>
+  //   );
+  // }
 
   return (
     <View style={styles.mainContainer}>
       <Header />
-      
+{loading && <ActivityIndicator size="large" color={SCARLET_RED} />}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={SCARLET_RED} />
         }
       >
         <View style={styles.content}>
-          {/* Welcome Section */}
-          <View style={styles.welcomeSection}>
-            <View>
-              <Text style={styles.welcomeTitle}>Event Attendance</Text>
-              <Text style={styles.welcomeSubtitle}>
-                {upcomingEvents.length} upcoming event{upcomingEvents.length !== 1 ? 's' : ''}
-              </Text>
+          {/* Compact Header Stats */}
+          <View style={styles.headerStats}>
+            <View style={styles.headerStatItem}>
+              <View style={[styles.headerStatIcon, { backgroundColor: LIGHT_RED }]}>
+                <Calendar size={20} color={SCARLET_RED} />
+              </View>
+              <View>
+                <Text style={styles.headerStatValue}>{statsOverview.totalEvents}</Text>
+                <Text style={styles.headerStatLabel}>Total</Text>
+              </View>
             </View>
-            <Avatar.Icon 
-              size={50} 
-              icon="calendar-check" 
-              style={{ backgroundColor: THEME + '20' }}
-              color={THEME}
-            />
+
+            <View style={styles.headerStatItem}>
+              <View style={[styles.headerStatIcon, { backgroundColor: "#DBEAFE" }]}>
+                <TrendingUp size={20} color="#0EA5E9" />
+              </View>
+              <View>
+                <Text style={styles.headerStatValue}>{statsOverview.upcomingCount}</Text>
+                <Text style={styles.headerStatLabel}>Upcoming</Text>
+              </View>
+            </View>
+
+            <View style={styles.headerStatItem}>
+              <View style={[styles.headerStatIcon, { backgroundColor: "#F3E8FF" }]}>
+                <BarChart3 size={20} color="#A855F7" />
+              </View>
+              <View>
+                <Text style={styles.headerStatValue}>{statsOverview.totalAttending}</Text>
+                <Text style={styles.headerStatLabel}>Attending</Text>
+              </View>
+            </View>
           </View>
 
-          {/* Next Event Highlight */}
-          {nextEvent && (
-            <View style={styles.nextEventSection}>
-              <View style={styles.nextEventHeader}>
-                <TrendingUp size={20} color={THEME} />
-                <Text style={styles.nextEventTitle}>Next Upcoming</Text>
+          {/* Upcoming Events Section */}
+          {upcomingEvents.length > 0 ? (
+            <View>
+              <View style={styles.sectionHeader}>
+                <Zap size={18} color={SCARLET_RED} />
+                <Text style={styles.sectionTitle}>
+                  Upcoming Events ({upcomingEvents.length})
+                </Text>
               </View>
-              {renderEventCard(nextEvent, true)}
+              <View style={styles.eventsContainer}>
+                {upcomingEvents
+                  .sort((a, b) => new Date(a.date) - new Date(b.date))
+                  .map(event => renderCompactEventCard(event))}
+              </View>
             </View>
-          )}
+          ) : null}
 
-          {/* Other Upcoming Events */}
-          {upcomingEvents.length > 1 && (
-            <View style={styles.upcomingSection}>
-              <Text style={styles.sectionTitle}>
-                Other Upcoming Events
-              </Text>
-              {upcomingEvents
-                .filter(event => event._id !== nextEvent?._id)
-                .map(event => renderEventCard(event))}
-            </View>
-          )}
-
-          {/* Past Events */}
+          {/* Past Events Section */}
           {pastEvents.length > 0 && (
-            <View style={styles.pastSection}>
-              <TouchableOpacity 
-                style={styles.pastHeader}
-                onPress={() => setExpandedPast(!expandedPast)}
-              >
-                <View style={styles.pastHeaderLeft}>
-                  <Calendar size={20} color="#666" />
-                  <Text style={styles.sectionTitle}>
-                    Past Events ({pastEvents.length})
+            <View style={styles.pastEventsSection}>
+              <View style={styles.sectionHeader}>
+                <Calendar size={18} color="#9CA3AF" />
+                <Text style={[styles.sectionTitle, { color: "#6B7280" }]}>
+                  Past Events ({pastEvents.length})
+                </Text>
+              </View>
+              <View style={styles.eventsContainer}>
+                {pastEvents
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .slice(0, 5)
+                  .map(event => renderCompactEventCard(event))}
+              </View>
+              {pastEvents.length > 5 && (
+                <View style={styles.viewMoreContainer}>
+                  <Text style={styles.viewMoreText}>
+                    +{pastEvents.length - 5} more past events
                   </Text>
-                </View>
-                <IconButton
-                  icon={expandedPast ? "chevron-up" : "chevron-down"}
-                  size={24}
-                  color="#666"
-                />
-              </TouchableOpacity>
-              
-              {expandedPast && (
-                <View style={styles.pastList}>
-                  {pastEvents
-                    .sort((a, b) => new Date(b.date) - new Date(a.date))
-                    .map(event => renderEventCard(event))}
                 </View>
               )}
             </View>
@@ -392,13 +377,17 @@ export default function Attendance() {
           {/* Empty State */}
           {events.length === 0 && (
             <View style={styles.emptyContainer}>
-              <Calendar size={64} color="#ccc" />
-              <Text style={styles.emptyTitle}>No Events Found</Text>
+              <View style={[styles.emptyIcon, { backgroundColor: LIGHT_RED }]}>
+                <Calendar size={48} color={SCARLET_RED} />
+              </View>
+              <Text style={styles.emptyTitle}>No Events Yet</Text>
               <Text style={styles.emptyText}>
-                There are no events scheduled at the moment.
+                Events will appear here when created
               </Text>
             </View>
           )}
+
+          <View style={styles.bottomPadding} />
         </View>
       </ScrollView>
     </View>
@@ -408,261 +397,275 @@ export default function Attendance() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#F9FAFB",
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
+  // loadingContainer: {
+  //   // flex: 1,
+  //   justifyContent: "center",
+  //   alignItems: "center",
+  //   backgroundColor: "#F9FAFB",
+  // },
   content: {
-    padding: 16,
+    padding: 12,
   },
-  welcomeSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+
+  // Header Stats
+  headerStats: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 20,
   },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  nextEventSection: {
-    marginBottom: 24,
-  },
-  nextEventHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  nextEventTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 8,
-    color: THEME,
-  },
-  upcomingSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  eventCard: {
-    marginBottom: 12,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  nextEventCard: {
-    borderWidth: 2,
-    borderColor: THEME,
-    backgroundColor: '#fff',
-  },
-  todayEventCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: THEME,
-  },
-  pastEventCard: {
-    opacity: 0.8,
-    backgroundColor: '#fafafa',
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  eventHeaderLeft: {
+  headerStatItem: {
     flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  dateBadge: {
-    width: 50,
-    height: 50,
-    backgroundColor: THEME + '10',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dateDay: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: THEME,
-  },
-  dateMonth: {
-    fontSize: 12,
-    color: THEME,
-    textTransform: 'uppercase',
-  },
-  eventTitleContainer: {
-    flex: 1,
-  },
-  eventTitle: {
-    fontWeight: '600',
-    marginBottom: 4,
-    color: '#333',
-  },
-  eventMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    color: '#666',
-    fontSize: 12,
-  },
-  statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#f8f8f8',
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
     padding: 12,
     borderRadius: 12,
-    marginTop: 8,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  headerStatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  statDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
+  headerStatValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
+  headerStatLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
   },
-  statValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    marginLeft: 2,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+
+  // Section Headers
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginTop: 16,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    gap: 6,
-    backgroundColor: '#fff',
-  },
-  actionButtonActive: {
-    backgroundColor: '#f8f8f8',
-    borderWidth: 2,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  actionButtonTextActive: {
-    color: THEME,
-    fontWeight: '600',
-  },
-  pastSection: {
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  pastHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
     marginBottom: 12,
+    paddingHorizontal: 4,
   },
-  pastHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  // Compact Cards
+  eventsContainer: {
     gap: 8,
   },
-  pastList: {
-    gap: 12,
+  compactCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: SCARLET_RED,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  pastEventLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-    marginTop: 8,
+  pastCompactCard: {
+    backgroundColor: "#FAFAFA",
+    borderLeftColor: "#D1D5DB",
+    opacity: 0.75,
   },
-  pastEventText: {
+
+  // Card Top Row
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 8,
+  },
+  datePill: {
+    backgroundColor: LIGHT_RED,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 55,
+    alignItems: "center",
+  },
+  datePillText: {
     fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
+    fontWeight: "700",
+    color: SCARLET_RED,
   },
+  titleSection: {
+    flex: 1,
+  },
+  compactTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  compactdesc: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  timeLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexWrap: "wrap",
+  },
+  timeText: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginRight: 6,
+  },
+  locationText: {
+    fontSize: 11,
+    color: "#6B7280",
+    flex: 1,
+  },
+
+  // Stats Row
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+    flexWrap: "wrap",
+  },
+  statIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statSmallValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  totalIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  totalValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  myStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: "auto",
+  },
+  myStatusText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  // Compact Action Buttons
+  compactActionButtons: {
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "flex-end",
+  },
+  compactActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+
+  // Past Event Label
+  pastLabel: {
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  pastLabelText: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    fontStyle: "italic",
+  },
+
+  // Past Events Section
+  pastEventsSection: {
+    marginTop: 12,
+  },
+  viewMoreContainer: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  viewMoreText: {
+    fontSize: 12,
+    color: SCARLET_RED,
+    fontWeight: "600",
+  },
+
+  // Empty State
   emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 60,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 16,
     marginTop: 20,
   },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 6,
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
+    color: "#6B7280",
+    textAlign: "center",
+  },
+
+  bottomPadding: {
+    height: 20,
   },
 });
