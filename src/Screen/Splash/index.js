@@ -102,8 +102,8 @@ export default function SplashScreen({ onAnimationComplete }) {
               },
             ]}
           >
-            <Text style={styles.appName}>FREEMASON</Text>
-            <Text style={styles.appSubtitle}>LODGE MANAGEMENT</Text>
+            <Text style={styles.appName}>LODGE MOTHER INDIA</Text>
+            <Text style={styles.appSubtitle}>NO. 110 , Est. 1935</Text>
           </Animated.View>
         </View>
       </SafeAreaView>
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   appName: {
-    fontSize: 36,
+    fontSize: 30,
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',

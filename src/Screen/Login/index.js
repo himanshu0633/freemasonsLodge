@@ -289,7 +289,7 @@ setActiveTab('login');
       if (error.response?.status === 401) {
         setError('Invalid email or password');
       } else if (error.response?.status === 403) {
-        setError('Please verify your email first');
+        setError('Please verify your ID first');
       } else if (error.response?.status === 423) {
         setError('Account is locked. Please try again later.');
       } else {
@@ -857,7 +857,7 @@ setActiveTab('login');
           {activeTab !== 'verifyEmail' && activeTab !== 'resetPassword' && (
             <View style={styles.illustrationContainer}>
               <Image
-                source={require('../../assets/logo.jpeg')}
+                source={require('../../assets/applogo.jpeg')}
                 style={[
                   styles.illustrationImage,
                   isSmallScreen && styles.illustrationImageSmall,

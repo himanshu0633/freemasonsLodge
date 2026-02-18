@@ -63,7 +63,7 @@ export default function Header() {
         <View style={styles.headerLeft}>
           <View style={styles.logoContainer}>
             <Image
-              source={require('../../assets/logo.jpeg')}
+              source={require('../../assets/applogo.jpeg')}
               style={styles.logo}
             />
           </View>
@@ -103,6 +103,16 @@ export default function Header() {
               {/* ✅ ADMIN ONLY */}
               {userRole === 'admin' && (
                 <>
+                <Pressable
+                style={styles.menuItem}
+                onPress={() => {
+                  setMenuVisible(false);
+                  navigation.navigate('allusers');
+                }}
+              >
+                <UserCircle size={18} color="#333" />
+                <Text style={styles.menuText}>All Users</Text>
+              </Pressable>
                   <Pressable
                     style={styles.menuItem}
                     onPress={() => {

@@ -6,78 +6,72 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Alert,
+  Modal as RNModal,
+  SafeAreaView,
 } from "react-native";
 import {
   Text,
   Avatar,
   TextInput,
-  Modal,
   Button,
-  Chip,
-  Searchbar,
   Card,
+  Chip,
+  ActivityIndicator,
 } from "react-native-paper";
-import { Plus, Users, MessageCircle } from "lucide-react-native";
+import { Plus, Search, X, Users, Check } from "lucide-react-native";
 import { useIsFocused, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import MultiSelect from "react-native-multiple-select";
 import Header from "../../Components/layout/Header";
 import * as chatapi from "../../chatapi";
+
+// Theme color
+const SCARLET_RED = "#DC143C";
+const LIGHT_SCARLET = "#FFE4E8";
 
 export default function Chat() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
 
   const [search, setSearch] = useState("");
-  const [groups, setGroups] = useState([]);
+  const [groups, setGroups] = useState([]); // Initialize as empty array
   const [userId, setUserId] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [groupName, setGroupName] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [dropdownVisible, setDropdownVisible] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Load user data
+  /** ---------------- LOAD USER ---------------- */
   useEffect(() => {
     (async () => {
       try {
         const stored = await AsyncStorage.getItem("userData");
-        if (!stored) {
-          console.log("No user data found");
-          return;
+        if (stored) {
+          const user = JSON.parse(stored);
+          setUserId(user._id);
         }
-        const user = JSON.parse(stored);
-        setUserId(user._id);
       } catch (error) {
-        console.error("Error loading user:", error);
+        console.error("Error loading user data:", error);
       }
     })();
   }, []);
 
-  // Load groups
+  /** ---------------- LOAD GROUPS ---------------- */
   const loadGroups = useCallback(async () => {
-    if (!userId) {
-      console.log("No userId available yet");
-      return;
-    }
+    if (!userId) return;
     
     try {
       setLoading(true);
-      console.log("Loading groups for userId:", userId);
-      // ✅ Fix: Use correct function name
-      const response = await chatapi.getAllGroups(userId);
-      console.log("Groups response:", response);
-      
-      // Handle different response structures
-      const groupsData = response?.data || response || [];
-      setGroups(Array.isArray(groupsData) ? groupsData : []);
+      const res = await chatapi.getAllGroups(userId);
+      // Ensure we always set an array
+      setGroups(Array.isArray(res?.data) ? res.data : []);
     } catch (error) {
       console.error("Error loading groups:", error);
-      Alert.alert("Error", "Failed to load groups. Please try again.");
-      setGroups([]);
+      setGroups([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -89,41 +83,19 @@ export default function Chat() {
     }
   }, [isFocused, userId, loadGroups]);
 
-  // Load users for group creation
+  /** ---------------- LOAD USERS ---------------- */
   useEffect(() => {
-    if (!modalVisible || !userId) return;
+    if (!modalVisible) return;
     
     const loadUsers = async () => {
       try {
         setLoadingUsers(true);
-        console.log("Loading all users...");
-        const response = await chatapi.getAllUsers();
-        console.log("Users response:", response);
-        
-        // Handle different response structures
-        const usersData = response?.data || response || [];
-        
-        // Ensure usersData is an array
-        if (!Array.isArray(usersData)) {
-          console.error("Users data is not an array:", usersData);
-          setUsers([]);
-          return;
-        }
-
-        // Filter out current user and format users
-        const formattedUsers = usersData
-          .filter(user => user && user._id !== userId)
-          .map(user => ({
-            ...user,
-            fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-            name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-          }));
-        
-        console.log("Formatted users:", formattedUsers);
-        setUsers(formattedUsers);
+        const res = await chatapi.getAllUsers();
+        // Filter out current user and ensure we have an array
+        const allUsers = Array.isArray(res?.data) ? res.data : [];
+        setUsers(allUsers.filter(u => u && u._id !== userId));
       } catch (error) {
         console.error("Error loading users:", error);
-        Alert.alert("Error", "Failed to load users. Please try again.");
         setUsers([]);
       } finally {
         setLoadingUsers(false);
@@ -133,258 +105,321 @@ export default function Chat() {
     loadUsers();
   }, [modalVisible, userId]);
 
+  /** ---------------- CREATE GROUP ---------------- */
   const handleCreateGroup = async () => {
-    if (!groupName || selectedUsers.length === 0) {
-      Alert.alert("Error", "Please enter a group name and select members");
-      return;
-    }
+    if (!groupName.trim() || selectedUsers.length === 0) return;
 
     try {
-      setLoading(true);
-      console.log("Creating group with:", {
-        name: groupName,
+      setCreatingGroup(true);
+      await chatapi.createGroup({
+        name: groupName.trim(),
         members: [...selectedUsers, userId],
         userId,
       });
 
-      const response = await chatapi.createGroup({
-        name: groupName,
-        members: [...selectedUsers, userId],
-        userId,
-      });
-
-      console.log("Create group response:", response);
-
+      // Reset form
       setGroupName("");
       setSelectedUsers([]);
       setModalVisible(false);
+      setDropdownVisible(false);
       
-      // Reload groups after successful creation
+      // Reload groups
       await loadGroups();
-      
-      Alert.alert("Success", "Group created successfully!");
     } catch (error) {
       console.error("Error creating group:", error);
-      Alert.alert("Error", "Failed to create group. Please check your network and try again.");
     } finally {
-      setLoading(false);
+      setCreatingGroup(false);
     }
   };
 
-  const filteredGroups = groups.filter(g =>
-    g?.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  /** ---------------- TOGGLE USER SELECTION ---------------- */
+  const toggleUser = (userId) => {
+    setSelectedUsers(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
 
-  const getInitials = (name) => {
-    if (!name) return "G";
-    return name
-      .split(' ')
-      .map(word => word?.[0] || '')
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+  /** ---------------- REMOVE SELECTED USER ---------------- */
+  const removeUser = (userId) => {
+    setSelectedUsers(prev => prev.filter(id => id !== userId));
+  };
+
+  // Safely filter groups - ensure groups is an array
+  const filteredGroups = Array.isArray(groups) 
+    ? groups.filter(g => 
+        g && g.name && g.name.toLowerCase().includes(search.toLowerCase())
+      )
+    : [];
+
+  const getUserById = (id) => {
+    return Array.isArray(users) ? users.find(u => u && u._id === id) : null;
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Header />
-      
+
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <View style={styles.titleContainer}>
-            <MessageCircle size={24} color="#2196F3" />
-            <Text variant="headlineMedium" style={styles.heading}>
-              Messages
-            </Text>
-          </View>
+          <Text variant="titleLarge" style={styles.heading}>
+            Messages
+          </Text>
 
           <TouchableOpacity
             style={styles.addBtn}
             onPress={() => setModalVisible(true)}
           >
-            <Plus size={24} color="#2196F3" />
+            <Plus size={22} color={SCARLET_RED} />
           </TouchableOpacity>
         </View>
 
-        <Searchbar
+        <TextInput
           placeholder="Search conversations..."
-          onChangeText={setSearch}
           value={search}
-          style={styles.searchBar}
-          inputStyle={styles.searchInput}
+          onChangeText={setSearch}
+          left={<TextInput.Icon icon={() => <Search size={18} color="#666" />} />}
+          mode="outlined"
+          dense
+          outlineColor="#ddd"
+          activeOutlineColor={SCARLET_RED}
+          style={styles.searchInput}
         />
       </View>
 
       <ScrollView 
-        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2196F3" />
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color={SCARLET_RED} />
+            <Text style={styles.loaderText}>Loading conversations...</Text>
           </View>
         ) : (
           <>
-            {filteredGroups.map(chat => (
-              <TouchableOpacity
-                key={chat?._id || Math.random().toString()}
-                style={styles.chatRow}
-                onPress={() => navigation.navigate("ChatScreen", { chat })}
-              >
-                <Avatar.Text
-                  size={52}
-                  label={getInitials(chat?.name)}
-                  style={styles.groupAvatar}
-                  labelStyle={styles.avatarLabel}
-                />
-                <View style={styles.chatContent}>
-                  <Text style={styles.chatName}>{chat?.name || "Unnamed Group"}</Text>
-                  <Text style={styles.message} numberOfLines={1}>
-                    {chat?.lastMessage || "No messages yet"}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-
-            {filteredGroups.length === 0 && !loading && (
-              <Card style={styles.emptyCard}>
-                <Card.Content style={styles.emptyContent}>
-                  <Users size={48} color="#ccc" />
-                  <Text style={styles.emptyTitle}>No conversations yet</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Tap the + button to start a new group chat
-                  </Text>
-                </Card.Content>
-              </Card>
+            {filteredGroups.length > 0 ? (
+              filteredGroups.map(chat => (
+                <TouchableOpacity
+                  key={chat._id}
+                  style={styles.chatCard}
+                  onPress={() => navigation.navigate("ChatScreen", { chat })}
+                >
+                  <Card mode="elevated" style={styles.chatCardInner}>
+                    <View style={styles.chatRow}>
+                      <Avatar.Text
+                        size={52}
+                        label={chat.name?.[0]?.toUpperCase() || "G"}
+                        style={[styles.groupAvatar, { backgroundColor: LIGHT_SCARLET }]}
+                        color={SCARLET_RED}
+                      />
+                      <View style={styles.chatContent}>
+                        <Text style={styles.chatName}>{chat.name}</Text>
+                        <Text style={styles.message} numberOfLines={1}>
+                          {chat.lastMessage || "No messages yet"}
+                        </Text>
+                      </View>
+                    </View>
+                  </Card>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Users size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No conversations yet</Text>
+                <Button
+                  mode="contained"
+                  onPress={() => setModalVisible(true)}
+                  buttonColor={SCARLET_RED}
+                  style={styles.emptyBtn}
+                >
+                  Start a chat
+                </Button>
+              </View>
             )}
           </>
         )}
       </ScrollView>
 
-      <Modal
+      {/* ---------------- CUSTOM MODAL ---------------- */}
+      <RNModal
         visible={modalVisible}
-        onDismiss={() => setModalVisible(false)}
-        contentContainerStyle={styles.modalWrapper}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setModalVisible(false);
+          setDropdownVisible(false);
+          setSelectedUsers([]);
+          setGroupName("");
+        }}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.keyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalContainer}
         >
-          <View style={styles.modal}>
-            <Text variant="titleLarge" style={styles.modalTitle}>
-              Create New Group
-            </Text>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text variant="titleLarge" style={styles.modalTitle}>
+                Create New Group
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setModalVisible(false);
+                  setDropdownVisible(false);
+                  setSelectedUsers([]);
+                  setGroupName("");
+                }}
+                style={styles.closeBtn}
+              >
+                <X size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
 
-            <TextInput
-              label="Group Name"
-              value={groupName}
-              onChangeText={setGroupName}
-              mode="outlined"
-              style={styles.input}
-              outlineColor="#ddd"
-              activeOutlineColor="#2196F3"
-            />
-
-            <Text style={styles.sectionLabel}>Select Members</Text>
-            
-            {loadingUsers ? (
-              <View style={styles.loadingUsers}>
-                <ActivityIndicator size="small" color="#2196F3" />
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Group Name Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Group Name</Text>
+                <TextInput
+                  value={groupName}
+                  onChangeText={setGroupName}
+                  mode="outlined"
+                  placeholder="Enter group name"
+                  outlineColor="#ddd"
+                  activeOutlineColor={SCARLET_RED}
+                  style={styles.input}
+                />
               </View>
-            ) : (
-              <>
-                {users.length > 0 ? (
-                  <MultiSelect
-                    items={users}
-                    uniqueKey="_id"
-                    displayKey="fullName"
-                    selectedItems={selectedUsers}
-                    onSelectedItemsChange={setSelectedUsers}
-                    selectText="Pick members..."
-                    searchInputPlaceholderText="Search users..."
-                    tagRemoveIconColor="#ccc"
-                    tagBorderColor="#ccc"
-                    tagTextColor="#000"
-                    selectedItemTextColor="#2196F3"
-                    selectedItemIconColor="#2196F3"
-                    itemTextColor="#000"
-                    searchInputStyle={styles.searchInput}
-                    submitButtonColor="#2196F3"
-                    submitButtonText="Done"
-                    styleMainWrapper={styles.multiSelectMain}
-                    styleDropdownMenuSubsection={styles.multiSelectDropdown}
-                    styleSelectorContainer={styles.selectorContainer}
-                    styleTextDropdown={styles.dropdownText}
-                    styleIndicator={styles.indicator}
-                  />
-                ) : (
-                  <Text style={styles.noUsersText}>No users available</Text>
-                )}
 
-                {selectedUsers.length > 0 && (
-                  <View style={styles.selectedContainer}>
-                    <Text style={styles.selectedLabel}>
-                      Selected ({selectedUsers.length}):
-                    </Text>
-                    <View style={styles.chipContainer}>
-                      {selectedUsers.map(id => {
-                        const user = users.find(u => u?._id === id);
-                        return user ? (
-                          <Chip
-                            key={id}
-                            onClose={() => setSelectedUsers(prev => 
-                              prev.filter(uid => uid !== id)
-                            )}
-                            style={styles.chip}
-                            textStyle={styles.chipText}
-                          >
-                            {user.fullName}
-                          </Chip>
-                        ) : null;
-                      })}
-                    </View>
+              {/* Selected Users Chips */}
+              {selectedUsers.length > 0 && (
+                <View style={styles.selectedUsersContainer}>
+                  <Text style={styles.label}>Selected Members ({selectedUsers.length})</Text>
+                  <View style={styles.chipContainer}>
+                    {selectedUsers.map(id => {
+                      const user = getUserById(id);
+                      return user ? (
+                        <Chip
+                          key={id}
+                          onClose={() => removeUser(id)}
+                          style={styles.chip}
+                          textStyle={styles.chipText}
+                          closeIconColor={SCARLET_RED}
+                        >
+                          {user.name}
+                        </Chip>
+                      ) : null;
+                    })}
                   </View>
-                )}
-              </>
-            )}
+                </View>
+              )}
 
-            <View style={styles.modalActions}>
+              {/* Member Selection Dropdown */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Add Members</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setDropdownVisible(!dropdownVisible)}
+                >
+                  <Text style={styles.dropdownTriggerText}>
+                    {selectedUsers.length === 0 
+                      ? "Select members..." 
+                      : `${selectedUsers.length} member${selectedUsers.length > 1 ? 's' : ''} selected`}
+                  </Text>
+                  <Users size={20} color="#666" />
+                </TouchableOpacity>
+
+                {dropdownVisible && (
+                  <Card style={styles.dropdownMenu}>
+                    {loadingUsers ? (
+                      <View style={styles.dropdownLoader}>
+                        <ActivityIndicator size="small" color={SCARLET_RED} />
+                        <Text style={styles.dropdownLoaderText}>Loading users...</Text>
+                      </View>
+                    ) : (
+                      <ScrollView 
+                        style={styles.dropdownList}
+                        nestedScrollEnabled={true}
+                      >
+                        {Array.isArray(users) && users.length > 0 ? (
+                          users.map(user => (
+                            <TouchableOpacity
+                              key={user._id}
+                              style={styles.userItem}
+                              onPress={() => toggleUser(user._id)}
+                            >
+                              <View style={styles.userInfo}>
+                                <Avatar.Text
+                                  size={36}
+                                  label={user.name?.[0]?.toUpperCase() || "U"}
+                                  style={[styles.userAvatar, { backgroundColor: LIGHT_SCARLET }]}
+                                  color={SCARLET_RED}
+                                />
+                                <Text style={styles.userName}>{user.name}</Text>
+                              </View>
+                              {selectedUsers.includes(user._id) && (
+                                <Check size={20} color={SCARLET_RED} />
+                              )}
+                            </TouchableOpacity>
+                          ))
+                        ) : (
+                          <Text style={styles.noUsersText}>No users available</Text>
+                        )}
+                      </ScrollView>
+                    )}
+                  </Card>
+                )}
+              </View>
+            </ScrollView>
+
+            {/* Action Buttons */}
+            <View style={styles.modalFooter}>
               <Button
                 mode="outlined"
-                onPress={() => setModalVisible(false)}
-                style={styles.cancelBtn}
-                labelStyle={styles.cancelBtnLabel}
+                onPress={() => {
+                  setModalVisible(false);
+                  setDropdownVisible(false);
+                  setSelectedUsers([]);
+                  setGroupName("");
+                }}
+                style={styles.footerBtn}
+                textColor="#666"
+                borderColor="#ddd"
               >
                 Cancel
               </Button>
               <Button
                 mode="contained"
                 onPress={handleCreateGroup}
-                style={styles.createBtn}
-                labelStyle={styles.createBtnLabel}
-                disabled={!groupName || selectedUsers.length === 0 || loading}
-                loading={loading}
+                style={[styles.footerBtn, styles.createBtn]}
+                buttonColor={SCARLET_RED}
+                loading={creatingGroup}
+                disabled={!groupName.trim() || selectedUsers.length === 0 || creatingGroup}
               >
                 Create Group
               </Button>
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
-    </View>
+      </RNModal>
+    </SafeAreaView>
   );
 }
 
+/** ---------------- STYLES ---------------- */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
   },
   header: {
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: "#eee",
   },
   headerRow: {
     flexDirection: "row",
@@ -392,191 +427,208 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   heading: {
     fontWeight: "700",
-    color: '#333',
+    color: "#333",
   },
   addBtn: {
-    padding: 10,
-    borderRadius: 30,
-    backgroundColor: "#e3f2fd",
-  },
-  searchBar: {
-    elevation: 0,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: LIGHT_SCARLET,
   },
   searchInput: {
+    backgroundColor: "#fff",
+  },
+  scrollContent: {
+    padding: 16,
+    paddingTop: 8,
+    flexGrow: 1,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loaderText: {
+    marginTop: 12,
+    color: "#666",
     fontSize: 14,
   },
-  scrollView: {
-    flex: 1,
+  chatCard: {
+    marginBottom: 8,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 50,
+  chatCardInner: {
+    borderRadius: 12,
+    elevation: 2,
   },
   chatRow: {
     flexDirection: "row",
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    padding: 12,
+    alignItems: "center",
   },
   groupAvatar: {
-    backgroundColor: "#e3f2fd",
-  },
-  avatarLabel: {
-    fontSize: 18,
-    color: '#2196F3',
+    borderRadius: 26,
   },
   chatContent: {
+    marginLeft: 12,
     flex: 1,
-    marginLeft: 16,
-    justifyContent: 'center',
   },
   chatName: {
     fontWeight: "600",
     fontSize: 16,
-    color: '#333',
+    color: "#333",
     marginBottom: 4,
   },
   message: {
     fontSize: 13,
-    color: '#666',
+    color: "#666",
   },
-  emptyCard: {
-    margin: 16,
-    borderRadius: 12,
-    elevation: 2,
-  },
-  emptyContent: {
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  modalWrapper: {
-    justifyContent: "center",
+  emptyState: {
     alignItems: "center",
-    padding: 20,
+    justifyContent: "center",
+    paddingVertical: 60,
   },
-  keyboardView: {
-    width: '100%',
-  },
-  modal: {
-    width: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    textAlign: "center",
-    marginBottom: 20,
-    fontWeight: "700",
-    color: '#333',
-  },
-  input: {
-    marginBottom: 20,
-    backgroundColor: '#fff',
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-  },
-  loadingUsers: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  multiSelectMain: {
+  emptyText: {
+    fontSize: 16,
+    color: "#999",
+    marginTop: 12,
     marginBottom: 16,
   },
-  multiSelectDropdown: {
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    backgroundColor: '#fff',
+  emptyBtn: {
+    borderRadius: 24,
+    paddingHorizontal: 24,
   },
-  selectorContainer: {
-    marginTop: 4,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    maxHeight: 200,
+
+  /** MODAL STYLES */
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
-  dropdownText: {
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "90%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  modalTitle: {
+    fontWeight: "700",
+    color: "#333",
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
     fontSize: 14,
-    color: '#333',
-  },
-  indicator: {
-    marginRight: 8,
-  },
-  selectedContainer: {
-    marginTop: 16,
-  },
-  selectedLabel: {
-    fontSize: 13,
-    color: '#666',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 8,
   },
+  input: {
+    backgroundColor: "#fff",
+  },
+  selectedUsersContainer: {
+    marginBottom: 20,
+  },
   chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   chip: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: LIGHT_SCARLET,
     borderRadius: 20,
   },
   chipText: {
-    fontSize: 12,
-    color: '#2196F3',
+    color: SCARLET_RED,
+    fontSize: 13,
   },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    gap: 12,
+  dropdownTrigger: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    backgroundColor: "#fff",
   },
-  cancelBtn: {
+  dropdownTriggerText: {
+    color: "#333",
+    fontSize: 14,
+  },
+  dropdownMenu: {
+    marginTop: 8,
+    maxHeight: 300,
+    elevation: 4,
+    borderRadius: 8,
+  },
+  dropdownList: {
+    padding: 8,
+  },
+  dropdownLoader: {
+    padding: 20,
+    alignItems: "center",
+  },
+  dropdownLoaderText: {
+    marginTop: 8,
+    color: "#666",
+    fontSize: 14,
+  },
+  userItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 10,
+    borderRadius: 8,
+  },
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
-    borderColor: '#ddd',
   },
-  cancelBtnLabel: {
-    color: '#666',
+  userAvatar: {
+    marginRight: 12,
+    borderRadius: 18,
   },
-  createBtn: {
+  userName: {
+    fontSize: 15,
+    color: "#333",
     flex: 1,
-    backgroundColor: '#2196F3',
-  },
-  createBtnLabel: {
-    color: '#fff',
   },
   noUsersText: {
-    textAlign: 'center',
-    color: '#999',
+    textAlign: "center",
     padding: 20,
+    color: "#999",
+  },
+  modalFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+    marginTop: 8,
+  },
+  footerBtn: {
+    flex: 1,
+    marginHorizontal: 6,
+    borderRadius: 24,
+  },
+  createBtn: {
+    elevation: 0,
   },
 });

@@ -17,6 +17,7 @@ import NotificationPage from "./src/Screen/Notification";
 import Gallery from "./src/Screen/Gallery";
 import Attendance from "./src/Screen/Attendance/index";
 import AllAnnouncements from "./src/Screen/Anouncement/index";
+import AdminUserManagement from "./src/Screen/Profile/AdminProfile";
 
 import messaging, {
   AuthorizationStatus,
@@ -190,6 +191,8 @@ export default function App() {
             <Stack.Screen name="NotificationPage" component={NotificationPage} />
             <Stack.Screen name="Gallery" component={Gallery} />
             <Stack.Screen name="announcements" component={AllAnnouncements} />
+             <Stack.Screen name="allusers" component={AdminUserManagement} />
+            
           </Stack.Navigator>
         </NavigationContainer>
       </PaperProvider>

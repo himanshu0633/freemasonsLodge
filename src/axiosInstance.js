@@ -1,7 +1,7 @@
 // axiosInstance.js
 import axios from 'axios';
 const axiosInstance = axios.create({
-  baseURL: "https://85hh51r8-4000.inc1.devtunnels.ms/api",
+  baseURL: "http://148.135.136.136:4000/api",
   
   // baseURL:"https://j449fxt7-4000.inc1.devtunnels.ms/api",
   headers: {
